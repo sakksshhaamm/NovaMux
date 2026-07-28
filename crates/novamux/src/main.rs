@@ -35,8 +35,12 @@ fn main() -> ExitCode {
 }
 
 fn run_shell() -> ExitCode {
+    eprintln!("NovaMux: entering PTY shell (type 'exit' or press Control-D to return)");
     match run_shell_inner() {
-        Ok(code) => ExitCode::from(code),
+        Ok(code) => {
+            eprintln!("NovaMux: PTY shell closed");
+            ExitCode::from(code)
+        }
         Err(error) => {
             eprintln!("NovaMux shell failed: {error}");
             ExitCode::FAILURE
@@ -55,6 +59,10 @@ fn run_shell_inner() -> Result<u8, Box<dyn std::error::Error>> {
 
     let mut command = CommandBuilder::new(default_shell());
     command.env("TERM", "xterm-256color");
+    command.env("NOVAMUX", "1");
+    if let Ok(current_directory) = env::current_dir() {
+        command.cwd(current_directory);
+    }
     let mut child = pair.slave.spawn_command(command)?;
     drop(pair.slave);
 
