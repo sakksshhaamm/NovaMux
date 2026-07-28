@@ -14,6 +14,8 @@
 - Byte-preserving `Ctrl-B` command routing for live-pane controls.
 - Bounded VT-compatible terminal buffers for independent live panes.
 - Atomic pane-to-runtime ownership reconciliation with failed-spawn rollback.
+- Per-pane live PTY runtime ownership, input, resize, exit polling, cleanup,
+  and synchronized output parsing into bounded terminal buffers.
 
 ### Fixed
 

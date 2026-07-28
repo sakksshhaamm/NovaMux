@@ -10,6 +10,7 @@ repository.workspace = true
 [dependencies]
 crossterm = { version = "0.29.0", default-features = false }
 novamux-core = { path = "../novamux-core" }
+novamux-terminal = { path = "../novamux-terminal" }
 portable-pty = "0.9.0"
 
 [lints]
