@@ -75,4 +75,8 @@ SSH service; NovaMux will attach to that user's local session after login.
   authentication are independent of configuration.
 - Optional accent animation derives one of four deterministic frames from
   monotonic elapsed time. No animation state grows over time, and only the
-  local renderer consumes it.
+  focused border and status accent change.
+- Optional ASCII screensavers are local-client state derived from a monotonic
+  idle deadline. Their deterministic frames are bounded by terminal dimensions,
+  rendered at no more than eight frames per second, and never enter the session
+  protocol or daemon.

@@ -1,14 +1,15 @@
 # NovaMux configuration is local, declarative, and offline.
-theme = default
+theme = sakura
 # `subtle` gently pulses RGB focus/status accents at 8 Hz. Use `off` for
 # accessibility, maximum stillness, or constrained terminals.
 animation = off
 
-# Names: black, red, green, yellow, blue, magenta, cyan, white,
-# dark-grey, grey. Exact 24-bit colors use #RRGGBB.
-pane_border = dark-grey
-focused_border = cyan
-status = black
-status_background = cyan
-foreground = white
-background = black
+# Optional client-only idle art: off, panda-climb, or cat-play.
+screensaver = off
+# Used only when a screensaver is enabled; valid range is 10..3600.
+idle_seconds = 300
+
+# Optional overrides. Names: black, red, green, yellow, blue, magenta, cyan,
+# white, dark-grey, grey. Exact 24-bit colors use #RRGGBB.
+# focused_border = #FF4FA3
+# background = #160B18

@@ -21,6 +21,7 @@ use crate::session_service::AttachedClient;
 use crate::{
     config,
     config::{Config, Theme},
+    screensaver::{self, IdleState},
 };
 
 type AppResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
@@ -59,6 +60,8 @@ pub fn run_attached(name: SessionName) -> AppResult<()> {
     let config = config::load()?;
     let animation_enabled = animation_enabled(config);
     let animation_start = Instant::now();
+    let idle_allowed = visual_effects_allowed();
+    let mut idle = IdleState::new(Instant::now());
     let mut client = AttachedClient::connect(name)?;
     let _screen = ScreenGuard::enter()?;
     let mut router = InputRouter::new();
@@ -70,16 +73,37 @@ pub fn run_attached(name: SessionName) -> AppResult<()> {
     })?;
     let mut stdout = io::stdout().lock();
     loop {
-        render_remote(
-            &mut stdout,
-            size,
-            screen(&response)?,
-            copy_mode.is_active(),
-            animated_theme(config, animation_enabled, animation_start.elapsed()),
-        )?;
-        if event::poll(Duration::from_millis(33))? {
+        let now = Instant::now();
+        let screensaver_active =
+            idle.update(now, config.screensaver, config.idle_seconds, idle_allowed);
+        if screensaver_active {
+            render_screensaver(
+                &mut stdout,
+                size,
+                config,
+                idle.frame(now),
+                animation_enabled,
+                animation_start.elapsed(),
+            )?;
+        } else {
+            render_remote(
+                &mut stdout,
+                size,
+                screen(&response)?,
+                copy_mode.is_active(),
+                animated_theme(config, animation_enabled, animation_start.elapsed()),
+            )?;
+        }
+        if event::poll(if screensaver_active {
+            screensaver::FRAME_INTERVAL
+        } else {
+            Duration::from_millis(33)
+        })? {
             match event::read()? {
                 Event::Key(key) if key.kind != KeyEventKind::Release => {
+                    if idle.input(Instant::now()) {
+                        continue;
+                    }
                     if copy_mode.is_active() {
                         if matches!(copy_mode_action(key), Some(CopyModeAction::Exit)) {
                             copy_mode.exit();
@@ -112,6 +136,9 @@ pub fn run_attached(name: SessionName) -> AppResult<()> {
                     size = (cols, rows);
                     response = client.exchange(&Request::Resize { cols, rows })?;
                 }
+                Event::Mouse(_) => {
+                    idle.input(Instant::now());
+                }
                 _ => {}
             }
         } else {
@@ -126,6 +153,49 @@ fn screen(response: &Response) -> AppResult<&[PaneSnapshot]> {
         Response::Error { message, .. } => Err(message.clone().into()),
         _ => Err("unexpected daemon screen response".into()),
     }
+}
+
+fn visual_effects_allowed() -> bool {
+    io::stdin().is_terminal()
+        && io::stdout().is_terminal()
+        && std::env::var_os("TERM").is_none_or(|term| term != "dumb")
+}
+
+fn render_screensaver(
+    output: &mut impl Write,
+    size: (u16, u16),
+    config: Config,
+    frame: usize,
+    animation_enabled: bool,
+    elapsed: Duration,
+) -> AppResult<()> {
+    let theme = animated_theme(config, animation_enabled, elapsed);
+    queue!(
+        output,
+        Hide,
+        SetForegroundColor(to_terminal_color(theme.focused_border)),
+        SetBackgroundColor(to_terminal_color(theme.background)),
+        Clear(ClearType::All)
+    )?;
+    let lines = screensaver::artwork(config.screensaver, frame, size.0, size.1);
+    let top = size
+        .1
+        .saturating_sub(u16::try_from(lines.len()).unwrap_or(size.1))
+        / 2;
+    for (row, line) in lines.iter().enumerate() {
+        let line_width = u16::try_from(line.chars().count()).unwrap_or(size.0);
+        let x = size.0.saturating_sub(line_width) / 2;
+        let y = top.saturating_add(u16::try_from(row).unwrap_or(size.1));
+        if y < size.1 {
+            queue!(
+                output,
+                MoveTo(x, y),
+                Print(line.chars().take(usize::from(size.0)).collect::<String>())
+            )?;
+        }
+    }
+    output.flush()?;
+    Ok(())
 }
 
 const fn command_code(command: MultiplexerCommand) -> u8 {
@@ -242,6 +312,8 @@ struct App {
     config: Config,
     animation_enabled: bool,
     animation_start: Instant,
+    idle_allowed: bool,
+    idle: IdleState,
 }
 
 impl App {
@@ -259,6 +331,8 @@ impl App {
             config,
             animation_enabled: animation_enabled(config),
             animation_start: Instant::now(),
+            idle_allowed: visual_effects_allowed(),
+            idle: IdleState::new(Instant::now()),
         };
         app.resize_panes(size)?;
         Ok(app)
@@ -274,9 +348,16 @@ impl App {
             }
             self.render(&mut stdout, size)?;
 
-            if event::poll(Duration::from_millis(33))? {
+            if event::poll(if self.idle.is_active() {
+                screensaver::FRAME_INTERVAL
+            } else {
+                Duration::from_millis(33)
+            })? {
                 match event::read()? {
                     Event::Key(key) if key.kind != KeyEventKind::Release => {
+                        if self.idle.input(Instant::now()) {
+                            continue;
+                        }
                         if self.copy_mode.is_active() {
                             self.navigate_copy_mode(key, size)?;
                             continue;
@@ -300,6 +381,9 @@ impl App {
                     Event::Resize(cols, rows) => {
                         self.resize_panes((cols, rows))?;
                         self.last_size = (cols, rows);
+                    }
+                    Event::Mouse(_) => {
+                        self.idle.input(Instant::now());
                     }
                     _ => {}
                 }
@@ -380,7 +464,23 @@ impl App {
         })
     }
 
-    fn render(&self, output: &mut impl Write, size: (u16, u16)) -> AppResult<()> {
+    fn render(&mut self, output: &mut impl Write, size: (u16, u16)) -> AppResult<()> {
+        let now = Instant::now();
+        if self.idle.update(
+            now,
+            self.config.screensaver,
+            self.config.idle_seconds,
+            self.idle_allowed,
+        ) {
+            return render_screensaver(
+                output,
+                size,
+                self.config,
+                self.idle.frame(now),
+                self.animation_enabled,
+                self.animation_start.elapsed(),
+            );
+        }
         let theme = animated_theme(
             self.config,
             self.animation_enabled,
@@ -734,6 +834,7 @@ mod tests {
         let config = Config {
             theme: Theme::sakura(),
             animation: config::Animation::Subtle,
+            ..Config::default()
         };
         assert_eq!(
             animated_theme(config, true, Duration::ZERO),

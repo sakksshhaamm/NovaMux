@@ -107,7 +107,10 @@ substitutions, or environment-variable expansion. Configuration affects only
 local `start` and `attach` rendering; it is never sent across session IPC and
 cannot change daemon paths, executables, authentication, or trust decisions.
 
-Optional animation uses four fixed color frames at 8 Hz and bounded elapsed
-time arithmetic. It affects only focused-border and status colors, is off by
-default, and is suppressed for `TERM=dumb`. It cannot alter PTY input, daemon
-state, protocol snapshots, terminal text, or non-interactive commands.
+Optional animation uses four fixed color frames at 8 Hz and bounded elapsed-time
+arithmetic. It affects only focused-border and status colors. Optional idle
+scenes likewise use fixed original ASCII art and bounded terminal-size
+calculations. Both features are local-only, off by default, and suppressed for
+non-TTY or `TERM=dumb` clients. The first input dismissing a screensaver is
+consumed, so it cannot unexpectedly execute in the underlying shell. Neither
+feature can alter daemon state, protocol snapshots, or PTY text.
