@@ -2,8 +2,10 @@
 
 ## Current threat surface
 
-Iteration 1 is an in-memory state engine plus a read-only screen preview. It
-does not access the filesystem, network, PTYs, credentials, or subprocesses.
+The core is an in-memory state engine. The `shell` command opens a local PTY and
+launches one compile-time-selected system shell: `/bin/zsh` on macOS, `/bin/sh`
+on other Unix systems, or `cmd.exe` on Windows. NovaMux does not accept a shell
+path, command, or argument from the user. It does not elevate privileges.
 User-supplied session names are allow-listed to ASCII letters, numbers, hyphens,
 and underscores and are capped at 64 bytes.
 

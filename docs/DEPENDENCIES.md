@@ -2,11 +2,20 @@
 
 ## Runtime dependencies
 
-None outside the Rust standard library.
+### `portable-pty` 0.9.0
 
-The `novamux` executable depends only on the local `novamux-core` workspace
-crate. This keeps the initial supply-chain surface minimal and allows fully
-offline builds after installing the Rust toolchain.
+- **Required for:** opening and controlling native pseudo-terminals on macOS,
+  Linux, and Windows through one narrow interface.
+- **Security:** PTY setup necessarily calls operating-system APIs and contains
+  platform-specific unsafe code. NovaMux keeps that code outside its own
+  workspace and never accepts a user-supplied executable path.
+- **Maintenance:** maintained as part of the established WezTerm project; the
+  selected release was published in February 2025.
+- **Possible replacement:** small audited platform crates maintained by
+  NovaMux, or direct standard-library PTY support if Rust gains it.
+
+The platform-independent `novamux-core` crate remains standard-library-only.
+After dependencies are fetched, builds work offline.
 
 Every future external crate must document:
 

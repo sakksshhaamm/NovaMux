@@ -16,11 +16,12 @@ Iteration 1 provides the dependency-free core pane tree:
 - horizontal and vertical pane splits;
 - deterministic focus and close behavior;
 - terminal-cell layout calculation;
-- a non-executing CLI screen preview.
+- a CLI screen preview;
+- an experimental real local PTY shell for macOS testing.
 
-NovaMux does **not yet** spawn terminals, persist or reattach sessions, provide
-SSH/SFTP, or offer the file explorer. See [ROADMAP.md](ROADMAP.md) for the
-honest implementation status.
+NovaMux does **not yet** persist or reattach sessions, render multiple live
+shell panes, provide SSH/SFTP, or offer the file explorer. See
+[ROADMAP.md](ROADMAP.md) for the honest implementation status.
 
 ## Build and test
 
@@ -32,7 +33,12 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo build --workspace
 cargo test --workspace
 cargo run -- demo my_session
+cargo run -- shell
 ```
+
+The PTY shell currently uses the terminal's normal line input mode. Type `exit`
+or press Control-D to close it. Full-screen programs and per-keystroke shortcuts
+will be enabled by the future raw-mode TUI layer.
 
 End users will not need Rust once packaging is implemented.
 
