@@ -85,3 +85,12 @@ pane or quitting explicitly terminates and reaps its child process. The
 alternate screen and raw input mode are restored through a guard on every
 normal Rust error path. Process aborts and operating-system termination signals
 are not yet covered by a full signal policy.
+
+## Scrollback and copy mode
+
+Pane history remains capped at 10,000 lines. Viewport offsets use saturating
+arithmetic and are clamped to retained history; inspecting history does not
+alter the live terminal cursor or daemon state. Search is literal (never a
+regular expression), rejects terminal control characters, and accepts at most
+256 UTF-8 bytes. This checkpoint does not access the system clipboard or write
+extracted terminal text to disk.

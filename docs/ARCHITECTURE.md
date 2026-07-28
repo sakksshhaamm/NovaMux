@@ -65,3 +65,6 @@ SSH service; NovaMux will attach to that user's local session after login.
 - Attached clients never own daemon PTYs; detach and disconnect preserve them.
 - Core layout calculations are deterministic and use saturating arithmetic at
   terminal coordinate boundaries.
+- Historical viewport reads clone bounded screen state, while each TUI client
+  owns its copy-mode offset. Navigation therefore cannot move the daemon's live
+  terminal viewport or pause its PTYs.

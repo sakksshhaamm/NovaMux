@@ -22,6 +22,8 @@ The current development build provides:
 - a private per-user daemon that owns named detached shell sessions;
 - `novamux new NAME` and `novamux list` daemon controls.
 - `novamux attach NAME` with live input, splits, focus, resize, and detach.
+- bounded local scrollback navigation entered with `Ctrl-B [`; selection and
+  system clipboard copying are not implemented yet.
 
 The daemon keeps shell processes alive independently of the creating client,
 including while its single attached client is disconnected. NovaMux does not
@@ -53,7 +55,9 @@ entry and exit messages and preserves the directory from which it was launched.
 `novamux start` opens the alternate-screen multiplexer. Its controls are
 `Ctrl-B %` for a left/right split, `Ctrl-B "` for a top/bottom split,
 `Ctrl-B o` to focus the next pane, `Ctrl-B x` to close the focused pane, and
-`Ctrl-B q` to quit. The final pane cannot be closed.
+`Ctrl-B q` to quit. `Ctrl-B [` enters copy mode; arrow keys or `j`/`k` move by
+line, Page Up/Page Down move by page, and Escape or `q` exits. The final pane
+cannot be closed.
 
 For a named daemon session, run `novamux attach NAME`. `Ctrl-B d` detaches
 without stopping its shells; running `attach` again restores the latest bounded

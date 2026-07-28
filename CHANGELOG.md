@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added client-local copy-mode state entered with `Ctrl-B [`, safe line/page
+  navigation for local panes, and an explicit current-viewport mode for remote
+  attachments pending a history snapshot protocol.
+- Added non-mutating bounded scrollback viewport, literal search, and text
+  extraction primitives with strict query validation.
 - Added a dependency-free, size-bounded session IPC protocol codec for the
   upcoming create/list/attach/detach daemon milestone.
 - Added a private macOS/Linux Unix-domain endpoint with restrictive runtime
