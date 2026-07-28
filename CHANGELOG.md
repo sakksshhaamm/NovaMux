@@ -4,6 +4,11 @@
 
 - Added a dependency-free, size-bounded session IPC protocol codec for the
   upcoming create/list/attach/detach daemon milestone.
+- Added a private macOS/Linux Unix-domain endpoint with restrictive runtime
+  permissions, safe stale-socket recovery, path limits, I/O timeouts, and
+  fail-closed kernel peer authentication.
+- Added an explicit unsupported session transport on Windows pending an
+  equivalently secure named-pipe implementation.
 
 ## 0.1.0 - 2026-07-28
 

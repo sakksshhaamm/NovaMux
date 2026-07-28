@@ -33,9 +33,28 @@ unknown message and error codes, invalid UTF-8, invalid session names, session
 lists beyond 64 entries, and error text beyond 256 bytes. It has no deserializer
 dependency and performs no I/O.
 
-These checks limit parsing and allocation exposure but do not authenticate a
-client. The future local transport must verify same-user peer credentials and
-restrict endpoint permissions before dispatching any decoded request.
+These checks limit parsing and allocation exposure. On macOS and Linux, the
+local transport authenticates every accepted connection using kernel-supplied
+peer credentials before returning it to protocol code. It never listens on a
+network socket.
+
+The endpoint lives in a UID-qualified runtime directory. The directory must be
+absolute, owned by the effective user, be a real directory rather than a
+symlink, and grant no group or other access; newly created directories use mode
+`0700`. The socket path is limited to the conservative macOS maximum and is
+changed to mode `0600` immediately after binding.
+
+Endpoint recovery is fail-closed. NovaMux first attempts a connection. A
+successful connection means a daemon is live. Only after a failed connection
+will it inspect the endpoint without following symlinks, and it removes only a
+Unix socket owned by the current effective user. Regular files, symlinks,
+foreign-owned objects, and insecure runtime directories are never replaced.
+Accepted streams receive fixed read and write timeouts.
+
+Windows exposes an explicit unsupported transport rather than an
+unauthenticated fallback. It needs equivalent per-user ACLs and kernel peer
+identity before detach/attach can be enabled. Session dispatch is not part of
+this checkpoint.
 
 ## Attached multiplexer
 
