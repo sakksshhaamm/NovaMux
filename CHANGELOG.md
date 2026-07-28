@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Added a dependency-free, size-bounded session IPC protocol codec for the
+  upcoming create/list/attach/detach daemon milestone.
+
 ## 0.1.0 - 2026-07-28
 
 ### Added

@@ -34,7 +34,12 @@
 - **Possible replacement:** a NovaMux terminal-state machine built on `vte`,
   after comprehensive compatibility and fuzz testing exists.
 
-The platform-independent `novamux-core` crate remains standard-library-only.
+The platform-independent `novamux-core` crate, including its bounded binary
+session protocol codec, remains standard-library-only. A small fixed codec was
+preferred to a general serialization crate to keep the pre-authentication
+parser narrow, auditable, and free of additional transitive dependencies. It
+can be replaced by a formally specified serializer later if compatibility
+requirements justify the added dependency surface.
 After dependencies are fetched, builds work offline.
 
 Every future external crate must document:

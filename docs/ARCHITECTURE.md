@@ -6,8 +6,10 @@ NovaMux is a modular Cargo workspace.
 
 - `novamux-core`: platform-independent session state, pane trees, focus, and
   layout. It also owns the byte-preserving `Ctrl-B` input router so shortcut
-  behavior can be tested without a terminal or process. It performs no I/O and
-  executes no commands.
+  behavior can be tested without a terminal or process. Its dependency-free
+  session protocol codec defines bounded create, list, attach, detach, ping,
+  success, and structured-error messages. It performs no I/O and executes no
+  commands.
 - `novamux-terminal`: bounded VT-compatible parsing and screen state for each
   live pane. PTY reader workers feed bytes into this layer; renderers never
   interpret raw process output directly.
@@ -20,6 +22,19 @@ NovaMux is a modular Cargo workspace.
 
 Future PTY, daemon/IPC, terminal emulation, SSH/SFTP, filesystem, UI, and
 plugin components will be separate crates with narrow interfaces.
+
+## Session protocol
+
+The local session protocol uses a fixed magic value, explicit protocol version,
+message type, and big-endian payload length. A complete frame is capped at 8
+KiB. Session names are revalidated while decoding, session lists are capped at
+64 entries, and peer-provided error descriptions are capped at 256 bytes.
+Request and response type namespaces are decoded separately.
+
+The codec does not establish trust. A future transport must authenticate the
+operating-system peer, use a user-owned endpoint with restrictive permissions,
+and incrementally read the fixed header before allocating its bounded payload.
+No socket or daemon is part of this checkpoint.
 
 ## Shared-VM model
 

@@ -24,6 +24,19 @@ Unsafe Rust is forbidden across the workspace.
 
 Security-sensitive features will include adversarial tests before being marked
 complete.
+
+## Session IPC protocol
+
+The platform-independent protocol codec accepts at most 8 KiB per complete
+frame and rejects truncated frames, trailing bytes, unsupported versions,
+unknown message and error codes, invalid UTF-8, invalid session names, session
+lists beyond 64 entries, and error text beyond 256 bytes. It has no deserializer
+dependency and performs no I/O.
+
+These checks limit parsing and allocation exposure but do not authenticate a
+client. The future local transport must verify same-user peer credentials and
+restrict endpoint permissions before dispatching any decoded request.
+
 ## Attached multiplexer
 
 The `start` client launches only NovaMux's fixed platform shell executable and
