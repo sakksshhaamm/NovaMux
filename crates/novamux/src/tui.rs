@@ -3,7 +3,10 @@ use std::io::{self, IsTerminal, Write};
 use std::time::{Duration, Instant};
 
 use crossterm::cursor::{Hide, MoveTo, Show};
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{
+    self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind,
+    KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 use crossterm::queue;
 use crossterm::style::{
     Attribute, Color as TerminalColor, Print, ResetColor, SetAttribute, SetBackgroundColor,
@@ -16,6 +19,7 @@ use novamux_core::{
 };
 use novamux_terminal::TerminalSize;
 
+use crate::file_explorer::{EntryKind, FileExplorer};
 use crate::live_pty::LivePty;
 use crate::session_service::AttachedClient;
 use crate::{
@@ -53,6 +57,7 @@ pub fn run() -> AppResult<()> {
 ///
 /// Returns if the terminal is non-interactive, daemon communication fails, or
 /// terminal rendering/state restoration fails.
+#[allow(clippy::too_many_lines)]
 pub fn run_attached(name: SessionName) -> AppResult<()> {
     if !io::stdin().is_terminal() || !io::stdout().is_terminal() {
         return Err("novamux attach requires an interactive terminal".into());
@@ -66,6 +71,8 @@ pub fn run_attached(name: SessionName) -> AppResult<()> {
     let _screen = ScreenGuard::enter()?;
     let mut router = InputRouter::new();
     let mut copy_mode = CopyMode::default();
+    let explorer_root = std::env::current_dir()?;
+    let mut explorer: Option<FileExplorer> = None;
     let mut size = terminal::size()?;
     let mut response = client.exchange(&Request::Resize {
         cols: size.0,
@@ -76,7 +83,14 @@ pub fn run_attached(name: SessionName) -> AppResult<()> {
         let now = Instant::now();
         let screensaver_active =
             idle.update(now, config.screensaver, config.idle_seconds, idle_allowed);
-        if screensaver_active {
+        if let Some(browser) = explorer.as_ref() {
+            render_explorer(
+                &mut stdout,
+                size,
+                browser,
+                animated_theme(config, animation_enabled, animation_start.elapsed()),
+            )?;
+        } else if screensaver_active {
             render_screensaver(
                 &mut stdout,
                 size,
@@ -104,6 +118,12 @@ pub fn run_attached(name: SessionName) -> AppResult<()> {
                     if idle.input(Instant::now()) {
                         continue;
                     }
+                    if let Some(browser) = explorer.as_mut() {
+                        if explorer_key(browser, key, size) {
+                            explorer = None;
+                        }
+                        continue;
+                    }
                     if copy_mode.is_active() {
                         if matches!(copy_mode_action(key), Some(CopyModeAction::Exit)) {
                             copy_mode.exit();
@@ -126,6 +146,10 @@ pub fn run_attached(name: SessionName) -> AppResult<()> {
                                 copy_mode.enter();
                                 continue;
                             }
+                            InputAction::Command(MultiplexerCommand::ToggleFileExplorer) => {
+                                explorer = Some(FileExplorer::open(&explorer_root)?);
+                                continue;
+                            }
                             InputAction::Command(command) => {
                                 client.exchange(&Request::Command(command_code(command)))?
                             }
@@ -136,8 +160,11 @@ pub fn run_attached(name: SessionName) -> AppResult<()> {
                     size = (cols, rows);
                     response = client.exchange(&Request::Resize { cols, rows })?;
                 }
-                Event::Mouse(_) => {
+                Event::Mouse(mouse) => {
                     idle.input(Instant::now());
+                    if let Some(browser) = explorer.as_mut() {
+                        explorer_mouse(browser, mouse, size);
+                    }
                 }
                 _ => {}
             }
@@ -232,7 +259,8 @@ const fn command_code(command: MultiplexerCommand) -> u8 {
         MultiplexerCommand::CloseFocused => 4,
         MultiplexerCommand::Detach
         | MultiplexerCommand::Quit
-        | MultiplexerCommand::EnterCopyMode => 0,
+        | MultiplexerCommand::EnterCopyMode
+        | MultiplexerCommand::ToggleFileExplorer => 0,
     }
 }
 
@@ -276,7 +304,7 @@ fn render_remote(
             if copy_mode {
                 " COPY MODE (current remote viewport)  Esc/q exit "
             } else {
-                " NovaMux attached  Ctrl-B [ copy | d detach | % split | \" split | o focus | x close "
+                " NovaMux attached  Ctrl-B f files | [ copy | d detach | % split | \" split | o focus "
             },
             size.0
         )),
@@ -340,6 +368,8 @@ struct App {
     animation_start: Instant,
     idle_allowed: bool,
     idle: IdleState,
+    explorer_root: std::path::PathBuf,
+    explorer: Option<FileExplorer>,
 }
 
 impl App {
@@ -359,6 +389,8 @@ impl App {
             animation_start: Instant::now(),
             idle_allowed: visual_effects_allowed(),
             idle: IdleState::new(Instant::now()),
+            explorer_root: std::env::current_dir()?,
+            explorer: None,
         };
         app.resize_panes(size)?;
         Ok(app)
@@ -382,6 +414,12 @@ impl App {
                 match event::read()? {
                     Event::Key(key) if key.kind != KeyEventKind::Release => {
                         if self.idle.input(Instant::now()) {
+                            continue;
+                        }
+                        if let Some(browser) = self.explorer.as_mut() {
+                            if explorer_key(browser, key, size) {
+                                self.explorer = None;
+                            }
                             continue;
                         }
                         if self.copy_mode.is_active() {
@@ -408,8 +446,11 @@ impl App {
                         self.resize_panes((cols, rows))?;
                         self.last_size = (cols, rows);
                     }
-                    Event::Mouse(_) => {
+                    Event::Mouse(mouse) => {
                         self.idle.input(Instant::now());
+                        if let Some(browser) = self.explorer.as_mut() {
+                            explorer_mouse(browser, mouse, size);
+                        }
                     }
                     _ => {}
                 }
@@ -445,6 +486,9 @@ impl App {
             MultiplexerCommand::FocusNext => self.session.focus_next(),
             MultiplexerCommand::CloseFocused => self.close_focused()?,
             MultiplexerCommand::EnterCopyMode => self.copy_mode.enter(),
+            MultiplexerCommand::ToggleFileExplorer => {
+                self.explorer = Some(FileExplorer::open(&self.explorer_root)?);
+            }
             MultiplexerCommand::Detach | MultiplexerCommand::Quit => return Ok(true),
         }
         Ok(false)
@@ -512,6 +556,9 @@ impl App {
             self.animation_enabled,
             self.animation_start.elapsed(),
         );
+        if let Some(browser) = self.explorer.as_ref() {
+            return render_explorer(output, size, browser, theme);
+        }
         queue!(
             output,
             Hide,
@@ -579,7 +626,7 @@ impl App {
         if self.copy_mode.is_active() {
             " COPY MODE  ↑/k older | ↓/j newer | PgUp/PgDn page | Esc/q exit "
         } else {
-            " NovaMux  Ctrl-B [ copy | % split | \" split | o focus | x close | q quit "
+            " NovaMux  Ctrl-B f files | [ copy | % split | \" split | o focus | x close | q quit "
         }
     }
 
@@ -759,6 +806,169 @@ fn draw_text(output: &mut impl Write, rect: Rect, text: &str) -> io::Result<()> 
     Ok(())
 }
 
+const EXPLORER_HEADER_ROWS: u16 = 3;
+const EXPLORER_FOOTER_ROWS: u16 = 1;
+
+fn explorer_rows(size: (u16, u16)) -> usize {
+    usize::from(
+        size.1
+            .saturating_sub(EXPLORER_HEADER_ROWS + EXPLORER_FOOTER_ROWS),
+    )
+}
+
+fn explorer_key(browser: &mut FileExplorer, key: KeyEvent, size: (u16, u16)) -> bool {
+    let rows = explorer_rows(size).max(1);
+    match key.code {
+        KeyCode::Esc | KeyCode::Char('q' | 'f') => return true,
+        KeyCode::Up | KeyCode::Char('k') => browser.move_selection(-1, rows),
+        KeyCode::Down | KeyCode::Char('j') => browser.move_selection(1, rows),
+        KeyCode::PageUp => browser.page(-1, rows),
+        KeyCode::PageDown => browser.page(1, rows),
+        KeyCode::Enter | KeyCode::Right => browser.enter_selected(),
+        KeyCode::Left | KeyCode::Backspace => browser.parent(),
+        KeyCode::Char('r') => browser.refresh(),
+        _ => {}
+    }
+    false
+}
+
+fn explorer_mouse(browser: &mut FileExplorer, mouse: MouseEvent, size: (u16, u16)) {
+    let rows = explorer_rows(size).max(1);
+    match mouse.kind {
+        MouseEventKind::ScrollUp => browser.move_selection(-3, rows),
+        MouseEventKind::ScrollDown => browser.move_selection(3, rows),
+        MouseEventKind::Down(MouseButton::Right) => browser.parent(),
+        MouseEventKind::Down(MouseButton::Left)
+            if mouse.row >= EXPLORER_HEADER_ROWS
+                && usize::from(mouse.row - EXPLORER_HEADER_ROWS) < rows =>
+        {
+            let should_enter = browser.select_visible_row(
+                usize::from(mouse.row - EXPLORER_HEADER_ROWS),
+                rows,
+                Instant::now(),
+            );
+            if should_enter {
+                browser.enter_selected();
+            }
+        }
+        _ => {}
+    }
+}
+
+fn render_explorer(
+    output: &mut impl Write,
+    size: (u16, u16),
+    browser: &FileExplorer,
+    theme: Theme,
+) -> AppResult<()> {
+    queue!(
+        output,
+        Hide,
+        SetForegroundColor(to_terminal_color(theme.foreground)),
+        SetBackgroundColor(to_terminal_color(theme.background)),
+        Clear(ClearType::All),
+        MoveTo(0, 0),
+        SetForegroundColor(to_terminal_color(theme.focused_border)),
+        Print(fit_cells(" NovaMux Files — read only ", size.0)),
+        MoveTo(0, 1),
+        SetForegroundColor(to_terminal_color(theme.foreground)),
+        Print(fit_cells(
+            &format!(" {}", browser.current().display()),
+            size.0
+        )),
+        MoveTo(0, 2),
+        SetForegroundColor(to_terminal_color(theme.pane_border)),
+        Print(fit_cells(" TYPE       SIZE  NAME", size.0))
+    )?;
+
+    let rows = explorer_rows(size);
+    for (visible_row, entry) in browser
+        .entries()
+        .iter()
+        .skip(browser.offset())
+        .take(rows)
+        .enumerate()
+    {
+        let selected = browser
+            .selected()
+            .is_some_and(|candidate| candidate.path == entry.path);
+        let kind = match entry.kind {
+            EntryKind::Directory => "DIR ",
+            EntryKind::File => "FILE",
+            EntryKind::Symlink => "LINK",
+            EntryKind::Other => "OTHER",
+        };
+        let size_text = entry
+            .bytes
+            .map_or_else(|| "-".to_owned(), |bytes| bytes.to_string());
+        queue!(
+            output,
+            MoveTo(
+                0,
+                EXPLORER_HEADER_ROWS + u16::try_from(visible_row).unwrap_or(u16::MAX)
+            ),
+            SetForegroundColor(to_terminal_color(if selected {
+                theme.status
+            } else {
+                theme.foreground
+            })),
+            SetBackgroundColor(to_terminal_color(if selected {
+                theme.status_background
+            } else {
+                theme.background
+            })),
+            Print(fit_cells(
+                &format!(
+                    "{} {kind:<5} {size_text:>8}  {}{}",
+                    if selected { ">" } else { " " },
+                    entry.name,
+                    if entry.kind == EntryKind::Directory {
+                        "/"
+                    } else {
+                        ""
+                    }
+                ),
+                size.0
+            ))
+        )?;
+    }
+
+    let detail = browser.error().map_or_else(
+        || {
+            browser.selected().map_or_else(
+                || " empty directory ".to_owned(),
+                |entry| format!(" {} — {:?} — read only ", entry.name, entry.kind),
+            )
+        },
+        |error| format!(" {error} "),
+    );
+    if size.1 > 0 {
+        queue!(
+            output,
+            MoveTo(0, size.1 - 1),
+            SetForegroundColor(to_terminal_color(theme.status)),
+            SetBackgroundColor(to_terminal_color(theme.status_background)),
+            Print(fit_cells(
+                &format!("{detail}  Enter/double-click open | ← parent | wheel scroll | Esc close"),
+                size.0
+            )),
+            ResetColor
+        )?;
+    }
+    output.flush()?;
+    Ok(())
+}
+
+fn fit_cells(text: &str, width: u16) -> String {
+    let width = usize::from(width);
+    let mut value = screensaver::clip_cells(text, width);
+    value.extend(std::iter::repeat_n(
+        ' ',
+        width.saturating_sub(screensaver::display_width(&value)),
+    ));
+    value
+}
+
 fn fit(text: &str, width: u16) -> String {
     let width = usize::from(width);
     let mut value: String = text.chars().take(width).collect();
@@ -774,7 +984,9 @@ struct ScreenGuard;
 impl ScreenGuard {
     fn enter() -> io::Result<Self> {
         terminal::enable_raw_mode()?;
-        if let Err(error) = crossterm::execute!(io::stdout(), EnterAlternateScreen, Hide) {
+        if let Err(error) =
+            crossterm::execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture, Hide)
+        {
             let _ = terminal::disable_raw_mode();
             return Err(error);
         }
@@ -788,6 +1000,7 @@ impl Drop for ScreenGuard {
             io::stdout(),
             SetAttribute(Attribute::Reset),
             ResetColor,
+            DisableMouseCapture,
             Show,
             LeaveAlternateScreen
         );
@@ -874,5 +1087,17 @@ mod tests {
             pulse(config::Color::Rgb(250, 250, 250), 2),
             config::Color::Rgb(255, 255, 255)
         );
+    }
+
+    #[test]
+    fn explorer_rows_saturate_for_tiny_terminals() {
+        assert_eq!(explorer_rows((1, 1)), 0);
+        assert_eq!(explorer_rows((80, 24)), 20);
+    }
+
+    #[test]
+    fn explorer_text_fitting_respects_wide_unicode_cells() {
+        assert_eq!(screensaver::display_width(&fit_cells("🐼x", 3)), 3);
+        assert_eq!(fit_cells("🐼x", 2), "🐼");
     }
 }

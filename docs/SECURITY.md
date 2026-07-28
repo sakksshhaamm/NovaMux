@@ -116,3 +116,24 @@ ASCII for `TERM=dumb` or explicitly non-UTF-8 locales. The first input
 dismissing a screensaver is consumed, so it cannot unexpectedly execute in the
 underlying shell. Neither feature can alter daemon state, protocol snapshots,
 or PTY text.
+
+## Read-only file explorer
+
+The file explorer is presentation-only client state and has no write, execute,
+preview, transfer, clipboard, drag-and-drop, copy, move, rename, or delete
+operation. Its root is the canonical directory from which the client starts.
+Every entered directory is canonicalized again and must remain beneath that
+root. Parent navigation stops at the root.
+
+Listings use symlink metadata, label symbolic links explicitly, and never
+follow them. A directory is limited to 4,096 entries; excessive, unreadable,
+removed, and permission-denied directories surface an error instead of
+silently displaying partial state. Entry sorting is deterministic, with real
+directories before files and symlinks. Metadata can still race with external
+filesystem changes, so directory entry is revalidated at activation time.
+
+Mouse reporting is enabled only after entering NovaMux's alternate-screen TUI
+and is disabled by the same terminal restoration guard on every normal return
+or Rust error. Attached explorers are local to the attaching process. NovaMux
+does not imply that a remote VM file can be dragged into a desktop; that
+requires a future authenticated transfer layer and native desktop integration.
