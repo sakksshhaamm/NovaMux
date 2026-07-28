@@ -9,6 +9,10 @@
   fail-closed kernel peer authentication.
 - Added an explicit unsupported session transport on Windows pending an
   equivalently secure named-pipe implementation.
+- Added a per-user session daemon that owns named shell PTYs after the creating
+  client exits, with bounded `Ping`, `Create`, and `List` request handling.
+- Added `novamux new NAME` and `novamux list`, including fixed-current-executable
+  daemon autostart and a strict 64-session limit.
 
 ## 0.1.0 - 2026-07-28
 

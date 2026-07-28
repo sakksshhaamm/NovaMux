@@ -51,10 +51,22 @@ Unix socket owned by the current effective user. Regular files, symlinks,
 foreign-owned objects, and insecure runtime directories are never replaced.
 Accepted streams receive fixed read and write timeouts.
 
+The session client starts the daemon only by resolving the currently running
+NovaMux executable and passing the fixed private `__server` argument directly
+to the operating system process API. It never searches `PATH`, invokes a shell,
+or accepts an executable or daemon argument from the user. Concurrent starters
+are safe: only one process can bind the private endpoint and losing starters
+exit.
+
+The daemon revalidates protocol session names, caps ownership at 64 sessions,
+and creates only the compile-time-selected shell with no user-supplied command
+or arguments. Each hosted session owns its pane model and PTY registry. `Attach`
+and `Detach` currently return an explicit conflict error because screen
+streaming is not implemented.
+
 Windows exposes an explicit unsupported transport rather than an
 unauthenticated fallback. It needs equivalent per-user ACLs and kernel peer
-identity before detach/attach can be enabled. Session dispatch is not part of
-this checkpoint.
+identity before detach/attach can be enabled.
 
 ## Attached multiplexer
 

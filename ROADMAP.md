@@ -4,7 +4,7 @@ Status is intentionally conservative. `[x]` means implemented and tested.
 
 - [ ] Core multiplexer
   - [x] Pane tree, splits, focus, close, and layout
-  - [ ] Session daemon and authenticated local IPC
+  - [x] Session daemon and authenticated local create/list IPC
   - [ ] Detach and reattach
 - [ ] PTY engine
   - [x] Spawn a fixed local shell with PTY input/output

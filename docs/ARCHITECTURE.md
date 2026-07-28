@@ -18,12 +18,13 @@ NovaMux is a modular Cargo workspace.
   synchronized bounded terminal buffer. The `start` command reconciles these
   resources with the pane tree and renders them in an attached alternate-screen
   event loop. Its separate local-transport module binds a private Unix-domain
-  endpoint and authenticates peers before handing a byte stream to future
-  protocol dispatch. `demo` renders a fixed layout preview, while `shell`
+  endpoint and authenticates peers before handing a byte stream to bounded
+  protocol dispatch. Its daemon owns a `Session` and `PaneRegistry<LivePty>` for
+  every validated name. `demo` renders a fixed layout preview, while `shell`
   remains the single-PTY test interface.
 
-Future PTY, daemon/IPC, terminal emulation, SSH/SFTP, filesystem, UI, and
-plugin components will be separate crates with narrow interfaces.
+Future attach streaming, SSH/SFTP, filesystem, UI, and plugin components will
+use separate modules or crates with narrow interfaces.
 
 ## Session protocol
 
@@ -35,8 +36,8 @@ Request and response type namespaces are decoded separately.
 
 The codec does not establish trust. The local transport establishes a
 same-effective-user boundary using a private runtime directory and
-kernel-supplied Unix peer credentials. Protocol framing and the future session
-daemon remain independent from endpoint ownership.
+kernel-supplied Unix peer credentials. Protocol framing and session ownership
+remain independent from endpoint ownership.
 
 ## Shared-VM model
 
