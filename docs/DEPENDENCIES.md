@@ -54,6 +54,12 @@ preferred to a general serialization crate to keep the pre-authentication
 parser narrow, auditable, and free of additional transitive dependencies. It
 can be replaced by a formally specified serializer later if compatibility
 requirements justify the added dependency surface.
+
+Local configuration, built-in themes, RGB validation, and deterministic accent
+frames use only the Rust standard library and existing `crossterm` color
+commands. This milestone adds no dependency, asset decoder, timer runtime, or
+rendering framework.
+
 After dependencies are fetched, builds work offline.
 
 Every future external crate must document:

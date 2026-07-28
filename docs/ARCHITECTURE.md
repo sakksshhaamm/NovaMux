@@ -24,6 +24,9 @@ NovaMux is a modular Cargo workspace.
   resize, command, and screen-snapshot frames with that daemon. `demo` renders
   a fixed layout preview, while `shell`
   remains the single-PTY test interface.
+- `novamux::config`: a dependency-free, bounded parser for optional local
+  client configuration. It selects a built-in theme and validated color
+  overrides before entering the TUI. Values never enter the daemon protocol.
 
 Future SSH/SFTP, filesystem, UI, and plugin components will
 use separate modules or crates with narrow interfaces.
@@ -68,3 +71,8 @@ SSH service; NovaMux will attach to that user's local session after login.
 - Historical viewport reads clone bounded screen state, while each TUI client
   owns its copy-mode offset. Navigation therefore cannot move the daemon's live
   terminal viewport or pause its PTYs.
+- Themes are presentation-only client state. Daemon session ownership and IPC
+  authentication are independent of configuration.
+- Optional accent animation derives one of four deterministic frames from
+  monotonic elapsed time. No animation state grows over time, and only the
+  local renderer consumes it.

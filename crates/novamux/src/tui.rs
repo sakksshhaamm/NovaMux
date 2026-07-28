@@ -1,11 +1,14 @@
 use std::error::Error;
 use std::io::{self, IsTerminal, Write};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crossterm::cursor::{Hide, MoveTo, Show};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::queue;
-use crossterm::style::{Attribute, Print, SetAttribute};
+use crossterm::style::{
+    Attribute, Color as TerminalColor, Print, ResetColor, SetAttribute, SetBackgroundColor,
+    SetForegroundColor,
+};
 use crossterm::terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
 use novamux_core::{
     CopyMode, CopyModeAction, InputAction, InputRouter, MultiplexerCommand, PaneId, PaneRegistry,
@@ -15,6 +18,10 @@ use novamux_terminal::TerminalSize;
 
 use crate::live_pty::LivePty;
 use crate::session_service::AttachedClient;
+use crate::{
+    config,
+    config::{Config, Theme},
+};
 
 type AppResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 
@@ -31,8 +38,9 @@ pub fn run() -> AppResult<()> {
         return Err("novamux start requires an interactive terminal".into());
     }
 
+    let config = config::load()?;
     let _screen = ScreenGuard::enter()?;
-    let mut app = App::new()?;
+    let mut app = App::new(config)?;
     let result = app.event_loop();
     app.shutdown();
     result
@@ -48,6 +56,9 @@ pub fn run_attached(name: SessionName) -> AppResult<()> {
     if !io::stdin().is_terminal() || !io::stdout().is_terminal() {
         return Err("novamux attach requires an interactive terminal".into());
     }
+    let config = config::load()?;
+    let animation_enabled = animation_enabled(config);
+    let animation_start = Instant::now();
     let mut client = AttachedClient::connect(name)?;
     let _screen = ScreenGuard::enter()?;
     let mut router = InputRouter::new();
@@ -59,7 +70,13 @@ pub fn run_attached(name: SessionName) -> AppResult<()> {
     })?;
     let mut stdout = io::stdout().lock();
     loop {
-        render_remote(&mut stdout, size, screen(&response)?, copy_mode.is_active())?;
+        render_remote(
+            &mut stdout,
+            size,
+            screen(&response)?,
+            copy_mode.is_active(),
+            animated_theme(config, animation_enabled, animation_start.elapsed()),
+        )?;
         if event::poll(Duration::from_millis(33))? {
             match event::read()? {
                 Event::Key(key) if key.kind != KeyEventKind::Release => {
@@ -128,8 +145,15 @@ fn render_remote(
     size: (u16, u16),
     panes: &[PaneSnapshot],
     copy_mode: bool,
+    theme: Theme,
 ) -> AppResult<()> {
-    queue!(output, Hide, Clear(ClearType::All))?;
+    queue!(
+        output,
+        Hide,
+        SetForegroundColor(to_terminal_color(theme.foreground)),
+        SetBackgroundColor(to_terminal_color(theme.background)),
+        Clear(ClearType::All)
+    )?;
     for pane in panes {
         let rect = Rect {
             x: pane.x,
@@ -137,15 +161,21 @@ fn render_remote(
             width: pane.width,
             height: pane.height,
         };
-        draw_remote_border(output, rect, pane.id, pane.focused)?;
+        draw_remote_border(output, rect, pane.id, pane.focused, theme)?;
         if rect.width > 2 && rect.height > 2 {
+            queue!(
+                output,
+                SetForegroundColor(to_terminal_color(theme.foreground)),
+                SetBackgroundColor(to_terminal_color(theme.background))
+            )?;
             draw_text(output, rect, &pane.text)?;
         }
     }
     queue!(
         output,
         MoveTo(0, size.1.saturating_sub(1)),
-        SetAttribute(Attribute::Reverse),
+        SetForegroundColor(to_terminal_color(theme.status)),
+        SetBackgroundColor(to_terminal_color(theme.status_background)),
         Print(fit(
             if copy_mode {
                 " COPY MODE (current remote viewport)  Esc/q exit "
@@ -154,7 +184,7 @@ fn render_remote(
             },
             size.0
         )),
-        SetAttribute(Attribute::Reset)
+        ResetColor
     )?;
     output.flush()?;
     Ok(())
@@ -165,10 +195,20 @@ fn draw_remote_border(
     rect: Rect,
     pane: u64,
     focused: bool,
+    theme: Theme,
 ) -> io::Result<()> {
     if rect.width == 0 || rect.height == 0 {
         return Ok(());
     }
+    queue!(
+        output,
+        SetForegroundColor(to_terminal_color(if focused {
+            theme.focused_border
+        } else {
+            theme.pane_border
+        })),
+        SetBackgroundColor(to_terminal_color(theme.background))
+    )?;
     let glyph = if focused { '#' } else { '+' };
     for x in rect.x..rect.x.saturating_add(rect.width) {
         queue!(output, MoveTo(x, rect.y), Print(glyph))?;
@@ -199,10 +239,13 @@ struct App {
     router: InputRouter,
     last_size: (u16, u16),
     copy_mode: CopyMode,
+    config: Config,
+    animation_enabled: bool,
+    animation_start: Instant,
 }
 
 impl App {
-    fn new() -> AppResult<Self> {
+    fn new(config: Config) -> AppResult<Self> {
         let session = Session::new(SessionName::parse("local")?);
         let mut panes = PaneRegistry::new();
         let size = terminal::size()?;
@@ -213,6 +256,9 @@ impl App {
             router: InputRouter::new(),
             last_size: size,
             copy_mode: CopyMode::default(),
+            config,
+            animation_enabled: animation_enabled(config),
+            animation_start: Instant::now(),
         };
         app.resize_panes(size)?;
         Ok(app)
@@ -335,10 +381,21 @@ impl App {
     }
 
     fn render(&self, output: &mut impl Write, size: (u16, u16)) -> AppResult<()> {
-        queue!(output, Hide, Clear(ClearType::All))?;
+        let theme = animated_theme(
+            self.config,
+            self.animation_enabled,
+            self.animation_start.elapsed(),
+        );
+        queue!(
+            output,
+            Hide,
+            SetForegroundColor(to_terminal_color(theme.foreground)),
+            SetBackgroundColor(to_terminal_color(theme.background)),
+            Clear(ClearType::All)
+        )?;
         for (pane, rect) in self.layout(size) {
             let focused = pane == self.session.focused();
-            draw_border(output, rect, pane, focused)?;
+            draw_border(output, rect, pane, focused, theme)?;
             if rect.width > 2 && rect.height > 2 {
                 let text = self
                     .panes
@@ -354,6 +411,11 @@ impl App {
                     })
                     .transpose()?
                     .unwrap_or_default();
+                queue!(
+                    output,
+                    SetForegroundColor(to_terminal_color(theme.foreground)),
+                    SetBackgroundColor(to_terminal_color(theme.background))
+                )?;
                 draw_text(output, rect, &text)?;
             }
         }
@@ -361,9 +423,10 @@ impl App {
         queue!(
             output,
             MoveTo(0, status_y),
-            SetAttribute(Attribute::Reverse),
+            SetForegroundColor(to_terminal_color(theme.status)),
+            SetBackgroundColor(to_terminal_color(theme.status_background)),
             Print(fit(self.status_text(), size.0)),
-            SetAttribute(Attribute::Reset)
+            ResetColor
         )?;
         output.flush()?;
         Ok(())
@@ -451,10 +514,25 @@ fn content_size(rect: Rect) -> TerminalSize {
     )
 }
 
-fn draw_border(output: &mut impl Write, rect: Rect, pane: PaneId, focused: bool) -> io::Result<()> {
+fn draw_border(
+    output: &mut impl Write,
+    rect: Rect,
+    pane: PaneId,
+    focused: bool,
+    theme: Theme,
+) -> io::Result<()> {
     if rect.width == 0 || rect.height == 0 {
         return Ok(());
     }
+    queue!(
+        output,
+        SetForegroundColor(to_terminal_color(if focused {
+            theme.focused_border
+        } else {
+            theme.pane_border
+        })),
+        SetBackgroundColor(to_terminal_color(theme.background))
+    )?;
     let glyph = if focused { '#' } else { '+' };
     for x in rect.x..rect.x.saturating_add(rect.width) {
         queue!(output, MoveTo(x, rect.y), Print(glyph))?;
@@ -483,6 +561,58 @@ fn draw_border(output: &mut impl Write, rect: Rect, pane: PaneId, focused: bool)
         Print(fit(&label, rect.width.saturating_sub(2)))
     )?;
     Ok(())
+}
+
+const fn to_terminal_color(color: config::Color) -> TerminalColor {
+    match color {
+        config::Color::Black => TerminalColor::Black,
+        config::Color::Red => TerminalColor::Red,
+        config::Color::Green => TerminalColor::Green,
+        config::Color::Yellow => TerminalColor::Yellow,
+        config::Color::Blue => TerminalColor::Blue,
+        config::Color::Magenta => TerminalColor::Magenta,
+        config::Color::Cyan => TerminalColor::Cyan,
+        config::Color::White => TerminalColor::White,
+        config::Color::DarkGrey => TerminalColor::DarkGrey,
+        config::Color::Grey => TerminalColor::Grey,
+        config::Color::Rgb(red, green, blue) => TerminalColor::Rgb {
+            r: red,
+            g: green,
+            b: blue,
+        },
+    }
+}
+
+fn animation_enabled(config: Config) -> bool {
+    config.animation == config::Animation::Subtle
+        && std::env::var_os("TERM").is_none_or(|term| term != "dumb")
+}
+
+fn animated_theme(config: Config, enabled: bool, elapsed: Duration) -> Theme {
+    if !enabled {
+        return config.theme;
+    }
+    let frame = (elapsed.as_millis() / 125) as usize % 4;
+    let mut theme = config.theme;
+    theme.focused_border = pulse(theme.focused_border, frame);
+    theme.status_background = pulse(theme.status_background, frame);
+    theme
+}
+
+const fn pulse(color: config::Color, frame: usize) -> config::Color {
+    let amount = match frame % 4 {
+        1 | 3 => 10,
+        2 => 18,
+        _ => 0,
+    };
+    match color {
+        config::Color::Rgb(red, green, blue) => config::Color::Rgb(
+            red.saturating_add(amount),
+            green.saturating_add(amount),
+            blue.saturating_add(amount),
+        ),
+        named => named,
+    }
 }
 
 fn draw_text(output: &mut impl Write, rect: Rect, text: &str) -> io::Result<()> {
@@ -531,6 +661,7 @@ impl Drop for ScreenGuard {
         let _ = crossterm::execute!(
             io::stdout(),
             SetAttribute(Attribute::Reset),
+            ResetColor,
             Show,
             LeaveAlternateScreen
         );
@@ -595,6 +726,26 @@ mod tests {
         assert_eq!(
             copy_mode_action(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE)),
             None
+        );
+    }
+
+    #[test]
+    fn subtle_animation_frames_are_bounded_and_repeat() {
+        let config = Config {
+            theme: Theme::sakura(),
+            animation: config::Animation::Subtle,
+        };
+        assert_eq!(
+            animated_theme(config, true, Duration::ZERO),
+            animated_theme(config, true, Duration::from_millis(500))
+        );
+        assert_eq!(
+            animated_theme(config, false, Duration::from_millis(250)),
+            config.theme
+        );
+        assert_eq!(
+            pulse(config::Color::Rgb(250, 250, 250), 2),
+            config::Color::Rgb(255, 255, 255)
         );
     }
 }

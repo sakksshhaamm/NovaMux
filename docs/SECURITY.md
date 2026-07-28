@@ -94,3 +94,20 @@ alter the live terminal cursor or daemon state. Search is literal (never a
 regular expression), rejects terminal control characters, and accepts at most
 256 UTF-8 bytes. This checkpoint does not access the system clipboard or write
 extracted terminal text to disk.
+
+## Local configuration
+
+Configuration is an optional, client-local declarative file. A missing file
+selects built-in defaults. The parser accepts only eight known keys, rejects
+duplicates, reports exact line numbers, and bounds input to 16 KiB, 64 lines,
+and 512 bytes per line. Colors must be an allow-listed name or exact `#RRGGBB`.
+
+The format has no command or shell fields, includes, plugins, network access,
+substitutions, or environment-variable expansion. Configuration affects only
+local `start` and `attach` rendering; it is never sent across session IPC and
+cannot change daemon paths, executables, authentication, or trust decisions.
+
+Optional animation uses four fixed color frames at 8 Hz and bounded elapsed
+time arithmetic. It affects only focused-border and status colors, is off by
+default, and is suppressed for `TERM=dumb`. It cannot alter PTY input, daemon
+state, protocol snapshots, terminal text, or non-interactive commands.

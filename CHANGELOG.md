@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added strict, bounded local configuration with actionable line errors,
+  safe no-file defaults, default, high-contrast, and Sakura themes, and
+  validated named or `#RRGGBB` colors for pane borders, status bar, foreground,
+  and background.
+- Added an opt-in, reduced-motion-friendly subtle accent animation with four
+  bounded deterministic frames at 8 Hz and automatic `TERM=dumb` suppression.
+- Applied themes only to local `start` and `attach` clients without extending
+  daemon or protocol trust.
 - Added client-local copy-mode state entered with `Ctrl-B [`, safe line/page
   navigation for local panes, and an explicit current-viewport mode for remote
   attachments pending a history snapshot protocol.
