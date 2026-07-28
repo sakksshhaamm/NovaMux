@@ -16,11 +16,23 @@
 
 ### `crossterm` 0.29.0
 
-- **Required for:** portable raw-mode setup and terminal-size discovery.
-- **Security:** configured without default features, excluding its event,
-  clipboard, and Windows feature sets; NovaMux uses only terminal state APIs.
+- **Required for:** portable raw-mode setup, terminal-size discovery, keyboard
+  events, resize events, and alternate-screen drawing.
+- **Security:** configured without default features and with only the `events`
+  feature. It does not enable clipboard support. Its Unix event support adds
+  the maintained `mio` and `signal-hook` family of transitive crates.
 - **Maintenance:** actively maintained and widely used by Rust TUI projects.
 - **Possible replacement:** audited platform-specific terminal mode adapters.
+
+### `vt100` 0.16.2
+
+- **Required for:** safe VT-compatible parsing, bounded scrollback, and screen
+  state needed to render multiple independent PTYs.
+- **Security:** processes can emit hostile terminal sequences; parsing them into
+  a screen model prevents raw output from being composed directly by NovaMux.
+- **Maintenance:** current release with complete documented public APIs.
+- **Possible replacement:** a NovaMux terminal-state machine built on `vte`,
+  after comprehensive compatibility and fuzz testing exists.
 
 The platform-independent `novamux-core` crate remains standard-library-only.
 After dependencies are fetched, builds work offline.

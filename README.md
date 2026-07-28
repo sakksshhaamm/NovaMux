@@ -10,17 +10,18 @@ advertising, silent updater, or root requirement.
 
 ## Current status
 
-Iteration 1 provides the dependency-free core pane tree:
+The current development build provides:
 
 - validated portable session names;
 - horizontal and vertical pane splits;
 - deterministic focus and close behavior;
 - terminal-cell layout calculation;
 - a CLI screen preview;
-- an experimental real local PTY shell for macOS testing.
+- an experimental real local PTY shell;
+- an attached split-pane TUI with one independent PTY per pane.
 
 NovaMux does **not yet** persist or reattach sessions, render multiple live
-shell panes, provide SSH/SFTP, or offer the file explorer. See
+clients, provide SSH/SFTP, or offer the file explorer. See
 [ROADMAP.md](ROADMAP.md) for the honest implementation status.
 
 ## Build and test
@@ -34,11 +35,18 @@ cargo build --workspace
 cargo test --workspace
 cargo run -- demo my_session
 cargo run -- shell
+cargo run -- start
 ```
 
 The PTY shell uses raw keyboard input and propagates host-terminal size changes
 to the child PTY. Type `exit` or press Control-D to close it. NovaMux displays
 entry and exit messages and preserves the directory from which it was launched.
+
+`novamux start` opens the alternate-screen multiplexer. Its controls are
+`Ctrl-B %` for a left/right split, `Ctrl-B "` for a top/bottom split,
+`Ctrl-B o` to focus the next pane, `Ctrl-B x` to close the focused pane, and
+`Ctrl-B q` to quit. The final pane cannot be closed. This is an attached local
+client; detach/attach is not implemented yet.
 
 End users will not need Rust once packaging is implemented.
 

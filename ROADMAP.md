@@ -9,10 +9,11 @@ Status is intentionally conservative. `[x]` means implemented and tested.
 - [ ] PTY engine
   - [x] Spawn a fixed local shell with PTY input/output
   - [x] Dynamic resize and raw input mode
-  - [ ] Process shutdown and signal policy
+  - [x] Explicit child shutdown and reaping for attached panes
+  - [ ] Full signal policy
 - [ ] Persistent session manager
-- [ ] Interactive split-pane TUI
-- [ ] Terminal parser and renderer
+- [x] Interactive attached split-pane TUI
+- [x] Plain-text terminal parser and renderer
 - [ ] Mouse support
 - [ ] Native file explorer
 - [ ] File preview
