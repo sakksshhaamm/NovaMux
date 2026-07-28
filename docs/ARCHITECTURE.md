@@ -13,8 +13,10 @@ NovaMux is a modular Cargo workspace.
   interpret raw process output directly.
 - `novamux`: the user-facing executable and live PTY lifecycle layer. Each
   `LivePty` owns exactly one child, PTY master, input writer, output worker, and
-  synchronized bounded terminal buffer. Its current `demo` command renders a
-  fixed layout preview, while `shell` remains the single-PTY test interface.
+  synchronized bounded terminal buffer. The `start` command reconciles these
+  resources with the pane tree and renders them in an attached alternate-screen
+  event loop. `demo` renders a fixed layout preview, while `shell` remains the
+  single-PTY test interface.
 
 Future PTY, daemon/IPC, terminal emulation, SSH/SFTP, filesystem, UI, and
 plugin components will be separate crates with narrow interfaces.

@@ -24,3 +24,17 @@ Unsafe Rust is forbidden across the workspace.
 
 Security-sensitive features will include adversarial tests before being marked
 complete.
+## Attached multiplexer
+
+The `start` client launches only NovaMux's fixed platform shell executable and
+forwards keystrokes to the currently focused PTY. Multiplexer commands are
+recognized from a fixed `Ctrl-B` allow-list; they are never interpolated into a
+shell command. Pane output is parsed into bounded terminal state and rendered
+as plain text, so untrusted PTY escape sequences are not replayed into the host
+terminal.
+
+Pane working directories are canonicalized and must already exist. Closing a
+pane or quitting explicitly terminates and reaps its child process. The
+alternate screen and raw input mode are restored through a guard on every
+normal Rust error path. Process aborts and operating-system termination signals
+are not yet covered by a full signal policy.

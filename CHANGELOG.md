@@ -16,6 +16,10 @@
 - Atomic pane-to-runtime ownership reconciliation with failed-spawn rollback.
 - Per-pane live PTY runtime ownership, input, resize, exit polling, cleanup,
   and synchronized output parsing into bounded terminal buffers.
+- Attached alternate-screen `start` interface with live horizontal and vertical
+  splits, focus switching, guarded pane closing, and clean quit.
+- Plain pane borders, focused-pane indication, and an always-visible shortcut
+  reference.
 
 ### Fixed
 

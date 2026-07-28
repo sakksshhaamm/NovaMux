@@ -16,9 +16,11 @@
 
 ### `crossterm` 0.29.0
 
-- **Required for:** portable raw-mode setup and terminal-size discovery.
-- **Security:** configured without default features, excluding its event,
-  clipboard, and Windows feature sets; NovaMux uses only terminal state APIs.
+- **Required for:** portable raw-mode setup, terminal-size discovery, keyboard
+  events, resize events, and alternate-screen drawing.
+- **Security:** configured without default features and with only the `events`
+  feature. It does not enable clipboard support. Its Unix event support adds
+  the maintained `mio` and `signal-hook` family of transitive crates.
 - **Maintenance:** actively maintained and widely used by Rust TUI projects.
 - **Possible replacement:** audited platform-specific terminal mode adapters.
 

@@ -6,6 +6,7 @@ use std::thread;
 use std::time::Duration;
 
 use crossterm::terminal;
+use novamux::tui;
 use novamux_core::{Rect, Session, SessionName, SplitDirection};
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 
@@ -14,6 +15,7 @@ NovaMux 0.1.0
 
 USAGE:
     novamux shell
+    novamux start
     novamux demo [SESSION_NAME]
     novamux help
 
@@ -24,6 +26,7 @@ Type 'exit' or press Control-D to return to your normal terminal.
 fn main() -> ExitCode {
     let mut arguments = env::args().skip(1);
     match arguments.next().as_deref() {
+        Some("start") => run_start(),
         Some("shell") => run_shell(),
         Some("demo") => run_demo(arguments.next().as_deref().unwrap_or("dev")),
         Some("help" | "--help" | "-h") | None => {
@@ -33,6 +36,16 @@ fn main() -> ExitCode {
         Some(command) => {
             eprintln!("unknown command: {command}\n\n{HELP}");
             ExitCode::from(2)
+        }
+    }
+}
+
+fn run_start() -> ExitCode {
+    match tui::run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("NovaMux failed: {error}");
+            ExitCode::FAILURE
         }
     }
 }
