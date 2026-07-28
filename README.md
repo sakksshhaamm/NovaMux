@@ -24,8 +24,10 @@ The current development build provides:
 - `novamux attach NAME` with live input, splits, focus, resize, and detach.
 - bounded local scrollback navigation entered with `Ctrl-B [`; selection and
   system clipboard copying are not implemented yet.
-- strict offline local configuration with default, high-contrast, and Sakura
-  themes, validated named and 24-bit colors, and optional subtle accents.
+- strict offline local configuration with ten curated themes (including
+  Sakura, Cyberpunk, Ocean, Forest, Nord, and Sunset), validated named and
+  24-bit colors, optional subtle accents, and client-only Panda and cat idle
+  scenes.
 
 The daemon keeps shell processes alive independently of the creating client,
 including while its single attached client is disconnected. NovaMux does not

@@ -76,6 +76,111 @@ impl Theme {
             background: Color::Rgb(24, 15, 30),
         }
     }
+
+    /// Built-in violet night theme.
+    #[must_use]
+    pub const fn dracula() -> Self {
+        Self::rgb(
+            [68, 71, 90],
+            [189, 147, 249],
+            [40, 42, 54],
+            [255, 121, 198],
+            [248, 248, 242],
+        )
+    }
+
+    /// Built-in neon city theme.
+    #[must_use]
+    pub const fn cyberpunk() -> Self {
+        Self::rgb(
+            [61, 43, 88],
+            [0, 255, 224],
+            [18, 10, 36],
+            [255, 35, 149],
+            [246, 241, 255],
+        )
+    }
+
+    /// Built-in deep ocean theme.
+    #[must_use]
+    pub const fn ocean() -> Self {
+        Self::rgb(
+            [35, 78, 112],
+            [77, 220, 255],
+            [8, 27, 42],
+            [20, 115, 145],
+            [221, 247, 255],
+        )
+    }
+
+    /// Built-in evergreen theme.
+    #[must_use]
+    pub const fn forest() -> Self {
+        Self::rgb(
+            [54, 91, 67],
+            [144, 238, 144],
+            [13, 31, 20],
+            [45, 103, 63],
+            [230, 247, 232],
+        )
+    }
+
+    /// Built-in arctic theme.
+    #[must_use]
+    pub const fn nord() -> Self {
+        Self::rgb(
+            [76, 86, 106],
+            [136, 192, 208],
+            [46, 52, 64],
+            [94, 129, 172],
+            [236, 239, 244],
+        )
+    }
+
+    /// Built-in warm, low-glare dark theme.
+    #[must_use]
+    pub const fn solarized_dark() -> Self {
+        Self::rgb(
+            [88, 110, 117],
+            [181, 137, 0],
+            [0, 43, 54],
+            [7, 54, 66],
+            [147, 161, 161],
+        )
+    }
+
+    /// Built-in warm sunset theme.
+    #[must_use]
+    pub const fn sunset() -> Self {
+        Self::rgb(
+            [120, 68, 92],
+            [255, 180, 84],
+            [35, 20, 42],
+            [171, 58, 91],
+            [255, 235, 208],
+        )
+    }
+
+    const fn rgb(
+        pane: [u8; 3],
+        focused: [u8; 3],
+        background: [u8; 3],
+        status_background: [u8; 3],
+        foreground: [u8; 3],
+    ) -> Self {
+        Self {
+            pane_border: Color::Rgb(pane[0], pane[1], pane[2]),
+            focused_border: Color::Rgb(focused[0], focused[1], focused[2]),
+            status: Color::Rgb(foreground[0], foreground[1], foreground[2]),
+            status_background: Color::Rgb(
+                status_background[0],
+                status_background[1],
+                status_background[2],
+            ),
+            foreground: Color::Rgb(foreground[0], foreground[1], foreground[2]),
+            background: Color::Rgb(background[0], background[1], background[2]),
+        }
+    }
 }
 
 impl Default for Theme {
@@ -92,11 +197,47 @@ pub enum Animation {
     Subtle,
 }
 
-/// Complete local-client configuration.
+/// Optional client-local idle artwork.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Screensaver {
+    #[default]
+    Off,
+    PandaClimb,
+    CatPlay,
+}
+
+/// Character set used for client-local idle artwork.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum SceneStyle {
+    #[default]
+    Unicode,
+    Ascii,
+}
+
+/// Complete local-client configuration.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Config {
     pub theme: Theme,
     pub animation: Animation,
+    pub screensaver: Screensaver,
+    pub idle_seconds: u16,
+    pub scene_style: SceneStyle,
+}
+
+impl Config {
+    const DEFAULT_IDLE_SECONDS: u16 = 300;
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            theme: Theme::default(),
+            animation: Animation::default(),
+            screensaver: Screensaver::default(),
+            idle_seconds: Self::DEFAULT_IDLE_SECONDS,
+            scene_style: SceneStyle::default(),
+        }
+    }
 }
 
 /// Configuration read or validation error.
@@ -267,11 +408,15 @@ pub fn parse(source: &str) -> Result<Config, ConfigError> {
                     "default" => Theme::default_theme(),
                     "high-contrast" => Theme::high_contrast(),
                     "sakura" => Theme::sakura(),
+                    "dracula" => Theme::dracula(),
+                    "cyberpunk" => Theme::cyberpunk(),
+                    "ocean" => Theme::ocean(),
+                    "forest" => Theme::forest(),
+                    "nord" => Theme::nord(),
+                    "solarized-dark" => Theme::solarized_dark(),
+                    "sunset" => Theme::sunset(),
                     _ => {
-                        return invalid(
-                            line_number,
-                            "theme must be 'default', 'high-contrast', or 'sakura'",
-                        );
+                        return invalid(line_number, "unknown built-in theme");
                     }
                 };
             }
@@ -281,6 +426,31 @@ pub fn parse(source: &str) -> Result<Config, ConfigError> {
                     "subtle" => Animation::Subtle,
                     _ => return invalid(line_number, "animation must be 'off' or 'subtle'"),
                 };
+            }
+            "screensaver" => {
+                config.screensaver = match value {
+                    "off" => Screensaver::Off,
+                    "panda-climb" => Screensaver::PandaClimb,
+                    "cat-play" => Screensaver::CatPlay,
+                    _ => {
+                        return invalid(
+                            line_number,
+                            "screensaver must be 'off', 'panda-climb', or 'cat-play'",
+                        );
+                    }
+                };
+            }
+            "idle_seconds" => {
+                config.idle_seconds = value.parse::<u16>().map_err(|_| ConfigError::Invalid {
+                    line: line_number,
+                    message: "idle_seconds must be an integer from 10 to 3600".to_owned(),
+                })?;
+                if !(10..=3600).contains(&config.idle_seconds) {
+                    return invalid(line_number, "idle_seconds must be from 10 to 3600");
+                }
+            }
+            "scene_style" => {
+                config.scene_style = parse_scene_style(value, line_number)?;
             }
             "pane_border" => config.theme.pane_border = parse_color(value, line_number)?,
             "focused_border" => config.theme.focused_border = parse_color(value, line_number)?,
@@ -294,6 +464,14 @@ pub fn parse(source: &str) -> Result<Config, ConfigError> {
         }
     }
     Ok(config)
+}
+
+fn parse_scene_style(value: &str, line: usize) -> Result<SceneStyle, ConfigError> {
+    match value {
+        "unicode" => Ok(SceneStyle::Unicode),
+        "ascii" => Ok(SceneStyle::Ascii),
+        _ => invalid(line, "scene_style must be 'unicode' or 'ascii'"),
+    }
 }
 
 fn parse_color(value: &str, line: usize) -> Result<Color, ConfigError> {
@@ -375,6 +553,47 @@ mod tests {
         assert_eq!(config.animation, Animation::Subtle);
         assert_eq!(parse("").unwrap().animation, Animation::Off);
         assert!(parse("animation = fast\n").is_err());
+    }
+
+    #[test]
+    fn every_documented_theme_name_parses() {
+        for name in [
+            "default",
+            "high-contrast",
+            "sakura",
+            "dracula",
+            "cyberpunk",
+            "ocean",
+            "forest",
+            "nord",
+            "solarized-dark",
+            "sunset",
+        ] {
+            assert!(parse(&format!("theme = {name}\n")).is_ok(), "{name}");
+        }
+    }
+
+    #[test]
+    fn screensaver_and_idle_bounds_are_strict() {
+        let config = parse("screensaver = panda-climb\nidle_seconds = 10\n").expect("valid config");
+        assert_eq!(config.screensaver, Screensaver::PandaClimb);
+        assert_eq!(config.idle_seconds, 10);
+        assert_eq!(parse("").unwrap().screensaver, Screensaver::Off);
+        assert_eq!(parse("").unwrap().idle_seconds, 300);
+        assert_eq!(parse("").unwrap().scene_style, SceneStyle::Unicode);
+        for source in [
+            "idle_seconds = 9",
+            "idle_seconds = 3601",
+            "idle_seconds = forever",
+            "screensaver = command",
+        ] {
+            assert!(parse(source).is_err(), "{source}");
+        }
+        assert_eq!(
+            parse("scene_style = ascii").unwrap().scene_style,
+            SceneStyle::Ascii
+        );
+        assert!(parse("scene_style = emoji").is_err());
     }
 
     #[test]

@@ -2,6 +2,7 @@
 
 pub mod config;
 pub mod live_pty;
+mod screensaver;
 pub mod session_service;
 pub mod session_transport;
 pub mod tui;

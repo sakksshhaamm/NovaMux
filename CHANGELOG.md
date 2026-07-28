@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added seven curated built-in themes: Dracula, Cyberpunk, Ocean, Forest, Nord,
+  Solarized Dark, and Sunset.
+- Added opt-in original `panda-climb` and `cat-play` screensavers with
+  recognizable Unicode scenes, deterministic eight-FPS frames, display-cell
+  clipping, input-to-dismiss behavior, compact-terminal rendering, and an ASCII
+  compatibility style for `TERM=dumb` or non-UTF-8 locales.
 - Added strict, bounded local configuration with actionable line errors,
   safe no-file defaults, default, high-contrast, and Sakura themes, and
   validated named or `#RRGGBB` colors for pane borders, status bar, foreground,
