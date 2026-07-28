@@ -8,6 +8,9 @@ NovaMux is a modular Cargo workspace.
   layout. It also owns the byte-preserving `Ctrl-B` input router so shortcut
   behavior can be tested without a terminal or process. It performs no I/O and
   executes no commands.
+- `novamux-terminal`: bounded VT-compatible parsing and screen state for each
+  live pane. PTY reader workers feed bytes into this layer; renderers never
+  interpret raw process output directly.
 - `novamux`: the user-facing executable. Its current `demo` command renders a
   fixed layout preview without starting a shell.
 

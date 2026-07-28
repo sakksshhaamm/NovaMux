@@ -22,6 +22,16 @@
 - **Maintenance:** actively maintained and widely used by Rust TUI projects.
 - **Possible replacement:** audited platform-specific terminal mode adapters.
 
+### `vt100` 0.16.2
+
+- **Required for:** safe VT-compatible parsing, bounded scrollback, and screen
+  state needed to render multiple independent PTYs.
+- **Security:** processes can emit hostile terminal sequences; parsing them into
+  a screen model prevents raw output from being composed directly by NovaMux.
+- **Maintenance:** current release with complete documented public APIs.
+- **Possible replacement:** a NovaMux terminal-state machine built on `vte`,
+  after comprehensive compatibility and fuzz testing exists.
+
 The platform-independent `novamux-core` crate remains standard-library-only.
 After dependencies are fetched, builds work offline.
 

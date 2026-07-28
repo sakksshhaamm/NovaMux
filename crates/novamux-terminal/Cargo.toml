@@ -1,0 +1,14 @@
+[package]
+name = "novamux-terminal"
+description = "Bounded terminal emulation and screen state for NovaMux panes"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+vt100 = "0.16.2"
+
+[lints]
+workspace = true

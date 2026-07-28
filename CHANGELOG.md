@@ -12,4 +12,5 @@
 - Visible PTY entry/exit messages and preservation of the launch directory.
 - Raw keyboard input and live terminal resize propagation.
 - Byte-preserving `Ctrl-B` command routing for live-pane controls.
+- Bounded VT-compatible terminal buffers for independent live panes.
 - Architecture, dependency, security, and roadmap documentation.

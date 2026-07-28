@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/novamux-core", "crates/novamux"]
+members = ["crates/novamux-core", "crates/novamux-terminal", "crates/novamux"]
 resolver = "2"
 
 [workspace.package]
