@@ -109,8 +109,10 @@ cannot change daemon paths, executables, authentication, or trust decisions.
 
 Optional animation uses four fixed color frames at 8 Hz and bounded elapsed-time
 arithmetic. It affects only focused-border and status colors. Optional idle
-scenes likewise use fixed original ASCII art and bounded terminal-size
-calculations. Both features are local-only, off by default, and suppressed for
-non-TTY or `TERM=dumb` clients. The first input dismissing a screensaver is
-consumed, so it cannot unexpectedly execute in the underlying shell. Neither
-feature can alter daemon state, protocol snapshots, or PTY text.
+scenes likewise use fixed original Unicode/ASCII art, display-cell clipping,
+and bounded terminal-size calculations. Both features are local-only and off
+by default. Screensavers are suppressed for non-TTY clients and fall back to
+ASCII for `TERM=dumb` or explicitly non-UTF-8 locales. The first input
+dismissing a screensaver is consumed, so it cannot unexpectedly execute in the
+underlying shell. Neither feature can alter daemon state, protocol snapshots,
+or PTY text.

@@ -13,7 +13,7 @@ or modify this file.
 The format is deliberately small: one `key = value` setting per line. Empty
 lines and lines beginning with `#` are ignored. Supported keys are `theme`,
 `animation`, `pane_border`, `focused_border`, `status`, `status_background`,
-`foreground`, `background`, `screensaver`, and `idle_seconds`.
+`foreground`, `background`, `screensaver`, `scene_style`, and `idle_seconds`.
 
 `theme` is `default`, `high-contrast`, `sakura`, `dracula`, `cyberpunk`,
 `ocean`, `forest`, `nord`, `solarized-dark`, or `sunset`. The curated palettes
@@ -31,11 +31,14 @@ reduced motion, or maximum stillness. Named terminal colors remain static.
 
 `screensaver` is `off` (the default), `panda-climb`, or `cat-play`.
 `idle_seconds` is an integer from 10 through 3600 and defaults to 300. The
-original ASCII scenes run at four frames per second, use bounded deterministic
-frames, and exist only in the local client. Any key or mouse event dismisses
-the scene and is consumed rather than forwarded to the shell. Screensavers are
-disabled for non-interactive terminals and `TERM=dumb`; small terminals show a
-compact one-line fallback.
+original scenes run at eight frames per second, use bounded deterministic
+frames, and exist only in the local client. `scene_style` is `unicode` (the
+default) or `ascii`. Unicode mode shows recognizable emoji artwork such as a
+panda climbing bamboo and a cat chasing yarn. NovaMux automatically uses the
+ASCII compatibility scene for `TERM=dumb` or an explicitly non-UTF-8 locale.
+Any key or mouse event dismisses the scene and is consumed rather than
+forwarded to the shell. Screensavers are disabled for non-interactive
+terminals; small terminals show a compact one-line fallback.
 
 Unknown keys, duplicate keys, invalid colors, and malformed lines stop startup
 with the exact line number and an actionable message. Configuration is capped

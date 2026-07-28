@@ -206,6 +206,14 @@ pub enum Screensaver {
     CatPlay,
 }
 
+/// Character set used for client-local idle artwork.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum SceneStyle {
+    #[default]
+    Unicode,
+    Ascii,
+}
+
 /// Complete local-client configuration.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Config {
@@ -213,6 +221,7 @@ pub struct Config {
     pub animation: Animation,
     pub screensaver: Screensaver,
     pub idle_seconds: u16,
+    pub scene_style: SceneStyle,
 }
 
 impl Config {
@@ -226,6 +235,7 @@ impl Default for Config {
             animation: Animation::default(),
             screensaver: Screensaver::default(),
             idle_seconds: Self::DEFAULT_IDLE_SECONDS,
+            scene_style: SceneStyle::default(),
         }
     }
 }
@@ -439,6 +449,9 @@ pub fn parse(source: &str) -> Result<Config, ConfigError> {
                     return invalid(line_number, "idle_seconds must be from 10 to 3600");
                 }
             }
+            "scene_style" => {
+                config.scene_style = parse_scene_style(value, line_number)?;
+            }
             "pane_border" => config.theme.pane_border = parse_color(value, line_number)?,
             "focused_border" => config.theme.focused_border = parse_color(value, line_number)?,
             "status" => config.theme.status = parse_color(value, line_number)?,
@@ -451,6 +464,14 @@ pub fn parse(source: &str) -> Result<Config, ConfigError> {
         }
     }
     Ok(config)
+}
+
+fn parse_scene_style(value: &str, line: usize) -> Result<SceneStyle, ConfigError> {
+    match value {
+        "unicode" => Ok(SceneStyle::Unicode),
+        "ascii" => Ok(SceneStyle::Ascii),
+        _ => invalid(line, "scene_style must be 'unicode' or 'ascii'"),
+    }
 }
 
 fn parse_color(value: &str, line: usize) -> Result<Color, ConfigError> {
@@ -559,6 +580,7 @@ mod tests {
         assert_eq!(config.idle_seconds, 10);
         assert_eq!(parse("").unwrap().screensaver, Screensaver::Off);
         assert_eq!(parse("").unwrap().idle_seconds, 300);
+        assert_eq!(parse("").unwrap().scene_style, SceneStyle::Unicode);
         for source in [
             "idle_seconds = 9",
             "idle_seconds = 3601",
@@ -567,6 +589,11 @@ mod tests {
         ] {
             assert!(parse(source).is_err(), "{source}");
         }
+        assert_eq!(
+            parse("scene_style = ascii").unwrap().scene_style,
+            SceneStyle::Ascii
+        );
+        assert!(parse("scene_style = emoji").is_err());
     }
 
     #[test]

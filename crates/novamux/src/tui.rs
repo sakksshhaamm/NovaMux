@@ -156,9 +156,33 @@ fn screen(response: &Response) -> AppResult<&[PaneSnapshot]> {
 }
 
 fn visual_effects_allowed() -> bool {
-    io::stdin().is_terminal()
-        && io::stdout().is_terminal()
-        && std::env::var_os("TERM").is_none_or(|term| term != "dumb")
+    io::stdin().is_terminal() && io::stdout().is_terminal()
+}
+
+fn effective_scene_style(configured: config::SceneStyle) -> config::SceneStyle {
+    if configured == config::SceneStyle::Ascii || !terminal_supports_unicode() {
+        config::SceneStyle::Ascii
+    } else {
+        config::SceneStyle::Unicode
+    }
+}
+
+fn terminal_supports_unicode() -> bool {
+    if std::env::var_os("TERM").is_some_and(|term| term == "dumb") {
+        return false;
+    }
+    for name in ["LC_ALL", "LC_CTYPE", "LANG"] {
+        if let Some(locale) = std::env::var_os(name) {
+            let locale = locale.to_string_lossy().to_ascii_lowercase();
+            if locale == "c" || locale == "posix" {
+                return false;
+            }
+            if locale.contains("utf-8") || locale.contains("utf8") {
+                return true;
+            }
+        }
+    }
+    true
 }
 
 fn render_screensaver(
@@ -177,21 +201,23 @@ fn render_screensaver(
         SetBackgroundColor(to_terminal_color(theme.background)),
         Clear(ClearType::All)
     )?;
-    let lines = screensaver::artwork(config.screensaver, frame, size.0, size.1);
+    let lines = screensaver::artwork(
+        config.screensaver,
+        effective_scene_style(config.scene_style),
+        frame,
+        size.0,
+        size.1,
+    );
     let top = size
         .1
         .saturating_sub(u16::try_from(lines.len()).unwrap_or(size.1))
         / 2;
     for (row, line) in lines.iter().enumerate() {
-        let line_width = u16::try_from(line.chars().count()).unwrap_or(size.0);
+        let line_width = u16::try_from(screensaver::display_width(line)).unwrap_or(size.0);
         let x = size.0.saturating_sub(line_width) / 2;
         let y = top.saturating_add(u16::try_from(row).unwrap_or(size.1));
         if y < size.1 {
-            queue!(
-                output,
-                MoveTo(x, y),
-                Print(line.chars().take(usize::from(size.0)).collect::<String>())
-            )?;
+            queue!(output, MoveTo(x, y), Print(line))?;
         }
     }
     output.flush()?;

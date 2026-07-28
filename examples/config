@@ -6,6 +6,8 @@ animation = off
 
 # Optional client-only idle art: off, panda-climb, or cat-play.
 screensaver = off
+# `unicode` shows emoji scenes; use `ascii` for limited terminals.
+scene_style = unicode
 # Used only when a screensaver is enabled; valid range is 10..3600.
 idle_seconds = 300
 
