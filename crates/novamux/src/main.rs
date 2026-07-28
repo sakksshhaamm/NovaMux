@@ -1,8 +1,11 @@
 use std::env;
+use std::io::IsTerminal;
 use std::io::{self, Read, Write};
 use std::process::ExitCode;
 use std::thread;
+use std::time::Duration;
 
+use crossterm::terminal;
 use novamux_core::{Rect, Session, SessionName, SplitDirection};
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 
@@ -49,13 +52,11 @@ fn run_shell() -> ExitCode {
 }
 
 fn run_shell_inner() -> Result<u8, Box<dyn std::error::Error>> {
+    let interactive = io::stdin().is_terminal() && io::stdout().is_terminal();
+    let _raw_mode = RawModeGuard::new(interactive)?;
+    let initial_size = current_pty_size();
     let pty_system = native_pty_system();
-    let pair = pty_system.openpty(PtySize {
-        rows: 24,
-        cols: 80,
-        pixel_width: 0,
-        pixel_height: 0,
-    })?;
+    let pair = pty_system.openpty(initial_size)?;
 
     let mut command = CommandBuilder::new(default_shell());
     command.env("TERM", "xterm-256color");
@@ -93,7 +94,18 @@ fn run_shell_inner() -> Result<u8, Box<dyn std::error::Error>> {
             Ok(())
         })?;
 
-    let status = child.wait()?;
+    let mut last_size = initial_size;
+    let status = loop {
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+        let size = current_pty_size();
+        if size != last_size {
+            pair.master.resize(size)?;
+            last_size = size;
+        }
+        thread::sleep(Duration::from_millis(50));
+    };
     drop(pair.master);
 
     match output_thread.join() {
@@ -107,6 +119,37 @@ fn run_shell_inner() -> Result<u8, Box<dyn std::error::Error>> {
     drop(input_thread);
 
     Ok(status.exit_code().try_into().unwrap_or(1))
+}
+
+struct RawModeGuard {
+    enabled: bool,
+}
+
+impl RawModeGuard {
+    fn new(enabled: bool) -> io::Result<Self> {
+        if enabled {
+            terminal::enable_raw_mode()?;
+        }
+        Ok(Self { enabled })
+    }
+}
+
+impl Drop for RawModeGuard {
+    fn drop(&mut self) {
+        if self.enabled {
+            let _ = terminal::disable_raw_mode();
+        }
+    }
+}
+
+fn current_pty_size() -> PtySize {
+    let (cols, rows) = terminal::size().unwrap_or((80, 24));
+    PtySize {
+        rows: rows.max(1),
+        cols: cols.max(1),
+        pixel_width: 0,
+        pixel_height: 0,
+    }
 }
 
 #[cfg(target_os = "windows")]

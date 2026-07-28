@@ -10,4 +10,5 @@
 - CLI screen preview.
 - Experimental cross-platform PTY shell command with a fixed executable.
 - Visible PTY entry/exit messages and preservation of the launch directory.
+- Raw keyboard input and live terminal resize propagation.
 - Architecture, dependency, security, and roadmap documentation.

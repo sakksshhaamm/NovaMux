@@ -14,6 +14,14 @@
 - **Possible replacement:** small audited platform crates maintained by
   NovaMux, or direct standard-library PTY support if Rust gains it.
 
+### `crossterm` 0.29.0
+
+- **Required for:** portable raw-mode setup and terminal-size discovery.
+- **Security:** configured without default features, excluding its event,
+  clipboard, and Windows feature sets; NovaMux uses only terminal state APIs.
+- **Maintenance:** actively maintained and widely used by Rust TUI projects.
+- **Possible replacement:** audited platform-specific terminal mode adapters.
+
 The platform-independent `novamux-core` crate remains standard-library-only.
 After dependencies are fetched, builds work offline.
 

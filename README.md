@@ -36,10 +36,9 @@ cargo run -- demo my_session
 cargo run -- shell
 ```
 
-The PTY shell currently uses the terminal's normal line input mode. Type `exit`
-or press Control-D to close it. Full-screen programs and per-keystroke shortcuts
-will be enabled by the future raw-mode TUI layer. NovaMux displays entry and
-exit messages and preserves the directory from which it was launched.
+The PTY shell uses raw keyboard input and propagates host-terminal size changes
+to the child PTY. Type `exit` or press Control-D to close it. NovaMux displays
+entry and exit messages and preserves the directory from which it was launched.
 
 End users will not need Rust once packaging is implemented.
 

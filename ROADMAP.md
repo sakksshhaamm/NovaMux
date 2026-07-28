@@ -8,7 +8,7 @@ Status is intentionally conservative. `[x]` means implemented and tested.
   - [ ] Detach and reattach
 - [ ] PTY engine
   - [x] Spawn a fixed local shell with PTY input/output
-  - [ ] Dynamic resize and raw input mode
+  - [x] Dynamic resize and raw input mode
   - [ ] Process shutdown and signal policy
 - [ ] Persistent session manager
 - [ ] Interactive split-pane TUI
