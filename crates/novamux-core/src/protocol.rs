@@ -19,17 +19,26 @@ pub const MAX_FRAME_BYTES: usize = 8 * 1024;
 pub const MAX_LISTED_SESSIONS: usize = 64;
 /// Largest UTF-8 error description accepted from a peer.
 pub const MAX_ERROR_MESSAGE_BYTES: usize = 256;
+/// Largest input batch accepted from an attached client.
+pub const MAX_INPUT_BYTES: usize = 4 * 1024;
+/// Largest number of panes represented in one screen snapshot.
+pub const MAX_SNAPSHOT_PANES: usize = 32;
 
 const CREATE: u8 = 1;
 const LIST: u8 = 2;
 const ATTACH: u8 = 3;
 const DETACH: u8 = 4;
 const PING: u8 = 5;
+const INPUT: u8 = 6;
+const RESIZE: u8 = 7;
+const COMMAND: u8 = 8;
+const SNAPSHOT: u8 = 9;
 const CREATED: u8 = 0x81;
 const SESSIONS: u8 = 0x82;
 const ATTACHED: u8 = 0x83;
 const DETACHED: u8 = 0x84;
 const PONG: u8 = 0x85;
+const SCREEN: u8 = 0x86;
 const ERROR: u8 = 0xff;
 
 /// A request sent by an attached client.
@@ -45,6 +54,26 @@ pub enum Request {
     Detach(SessionName),
     /// Verify service liveness while correlating the response.
     Ping(u64),
+    /// Forward a bounded batch of terminal input to the focused pane.
+    Input(Vec<u8>),
+    /// Resize the attached client's terminal viewport.
+    Resize { cols: u16, rows: u16 },
+    /// Apply a multiplexer command encoded by its stable protocol value.
+    Command(u8),
+    /// Request the latest bounded screen snapshot.
+    Snapshot,
+}
+
+/// One pane in a bounded screen snapshot.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaneSnapshot {
+    pub id: u64,
+    pub x: u16,
+    pub y: u16,
+    pub width: u16,
+    pub height: u16,
+    pub focused: bool,
+    pub text: String,
 }
 
 /// Public information returned for a session listing.
@@ -98,6 +127,8 @@ pub enum Response {
     Detached(SessionName),
     /// Reply to a liveness check.
     Pong(u64),
+    /// Latest rendered state of an attached daemon-owned session.
+    Screen(Vec<PaneSnapshot>),
     /// A request failed without exposing unbounded diagnostic data.
     Error {
         /// Machine-readable category.
@@ -179,6 +210,23 @@ pub fn encode_request(request: &Request) -> Result<Vec<u8>, DecodeError> {
             payload.extend_from_slice(&nonce.to_be_bytes());
             PING
         }
+        Request::Input(bytes) => {
+            if bytes.len() > MAX_INPUT_BYTES {
+                return Err(DecodeError::InvalidLength);
+            }
+            put_bytes(&mut payload, bytes)?;
+            INPUT
+        }
+        Request::Resize { cols, rows } => {
+            payload.extend_from_slice(&cols.to_be_bytes());
+            payload.extend_from_slice(&rows.to_be_bytes());
+            RESIZE
+        }
+        Request::Command(command) => {
+            payload.push(*command);
+            COMMAND
+        }
+        Request::Snapshot => SNAPSHOT,
     };
     frame(kind, &payload)
 }
@@ -197,6 +245,13 @@ pub fn decode_request(bytes: &[u8]) -> Result<Request, DecodeError> {
         ATTACH => Request::Attach(cursor.name()?),
         DETACH => Request::Detach(cursor.name()?),
         PING => Request::Ping(cursor.u64()?),
+        INPUT => Request::Input(cursor.bytes(MAX_INPUT_BYTES)?.to_vec()),
+        RESIZE => Request::Resize {
+            cols: cursor.u16()?,
+            rows: cursor.u16()?,
+        },
+        COMMAND => Request::Command(cursor.byte()?),
+        SNAPSHOT => Request::Snapshot,
         _ => return Err(DecodeError::UnknownMessageType(kind)),
     };
     cursor.finish()?;
@@ -238,6 +293,21 @@ pub fn encode_response(response: &Response) -> Result<Vec<u8>, DecodeError> {
             payload.extend_from_slice(&nonce.to_be_bytes());
             PONG
         }
+        Response::Screen(panes) => {
+            if panes.len() > MAX_SNAPSHOT_PANES {
+                return Err(DecodeError::InvalidLength);
+            }
+            payload.push(u8::try_from(panes.len()).map_err(|_| DecodeError::InvalidLength)?);
+            for pane in panes {
+                payload.extend_from_slice(&pane.id.to_be_bytes());
+                for value in [pane.x, pane.y, pane.width, pane.height] {
+                    payload.extend_from_slice(&value.to_be_bytes());
+                }
+                payload.push(u8::from(pane.focused));
+                put_bytes(&mut payload, pane.text.as_bytes())?;
+            }
+            SCREEN
+        }
         Response::Error { code, message } => {
             if message.len() > MAX_ERROR_MESSAGE_BYTES {
                 return Err(DecodeError::InvalidLength);
@@ -277,6 +347,38 @@ pub fn decode_response(bytes: &[u8]) -> Result<Response, DecodeError> {
         ATTACHED => Response::Attached(cursor.name()?),
         DETACHED => Response::Detached(cursor.name()?),
         PONG => Response::Pong(cursor.u64()?),
+        SCREEN => {
+            let count = usize::from(cursor.byte()?);
+            if count > MAX_SNAPSHOT_PANES {
+                return Err(DecodeError::InvalidLength);
+            }
+            let mut panes = Vec::with_capacity(count);
+            for _ in 0..count {
+                let id = cursor.u64()?;
+                let x = cursor.u16()?;
+                let y = cursor.u16()?;
+                let width = cursor.u16()?;
+                let height = cursor.u16()?;
+                let focused = match cursor.byte()? {
+                    0 => false,
+                    1 => true,
+                    _ => return Err(DecodeError::InvalidLength),
+                };
+                let text = std::str::from_utf8(cursor.bytes(MAX_FRAME_BYTES)?)
+                    .map_err(|_| DecodeError::InvalidUtf8)?
+                    .to_owned();
+                panes.push(PaneSnapshot {
+                    id,
+                    x,
+                    y,
+                    width,
+                    height,
+                    focused,
+                    text,
+                });
+            }
+            Response::Screen(panes)
+        }
         ERROR => {
             let raw_code = cursor.byte()?;
             let code =
@@ -439,6 +541,13 @@ mod tests {
             Request::Attach(name("build")),
             Request::Detach(name("build")),
             Request::Ping(u64::MAX),
+            Request::Input(vec![0, 1, 2]),
+            Request::Resize {
+                cols: 120,
+                rows: 40,
+            },
+            Request::Command(3),
+            Request::Snapshot,
         ];
         for request in requests {
             let encoded = encode_request(&request).expect("request should encode");
@@ -463,6 +572,15 @@ mod tests {
             Response::Attached(name("build")),
             Response::Detached(name("build")),
             Response::Pong(42),
+            Response::Screen(vec![PaneSnapshot {
+                id: 7,
+                x: 1,
+                y: 2,
+                width: 80,
+                height: 24,
+                focused: true,
+                text: "hello".into(),
+            }]),
             Response::Error {
                 code: ErrorCode::NotFound,
                 message: "session not found".to_owned(),
@@ -548,6 +666,14 @@ mod tests {
         assert_eq!(
             decode_request(&response),
             Err(DecodeError::UnknownMessageType(PONG))
+        );
+    }
+
+    #[test]
+    fn rejects_oversized_attached_input() {
+        assert_eq!(
+            encode_request(&Request::Input(vec![0; MAX_INPUT_BYTES + 1])),
+            Err(DecodeError::InvalidLength)
         );
     }
 }

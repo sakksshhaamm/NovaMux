@@ -60,9 +60,12 @@ exit.
 
 The daemon revalidates protocol session names, caps ownership at 64 sessions,
 and creates only the compile-time-selected shell with no user-supplied command
-or arguments. Each hosted session owns its pane model and PTY registry. `Attach`
-and `Detach` currently return an explicit conflict error because screen
-streaming is not implemented.
+or arguments. Each hosted session owns its pane model and PTY registry.
+Attached input is limited to 4 KiB per frame, screen snapshots remain within
+the global 8 KiB limit, and at most 32 panes are serialized. Screen text is
+truncated only at valid UTF-8 boundaries. Exactly one client may attach to a
+session; a second receives a conflict response. Explicit detach and unexpected
+disconnect both release the client reservation without terminating PTYs.
 
 Windows exposes an explicit unsupported transport rather than an
 unauthenticated fallback. It needs equivalent per-user ACLs and kernel peer

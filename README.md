@@ -21,11 +21,12 @@ The current development build provides:
 - an attached split-pane TUI with one independent PTY per pane.
 - a private per-user daemon that owns named detached shell sessions;
 - `novamux new NAME` and `novamux list` daemon controls.
+- `novamux attach NAME` with live input, splits, focus, resize, and detach.
 
 The daemon keeps shell processes alive independently of the creating client,
-but screen attachment and input streaming are **not yet implemented**.
-NovaMux does not yet restore sessions after daemon or machine restart, render
-multiple live clients, provide SSH/SFTP, or offer the file explorer. See
+including while its single attached client is disconnected. NovaMux does not
+yet restore sessions after daemon or machine restart, support multiple clients
+on one session, provide SSH/SFTP, or offer the file explorer. See
 [ROADMAP.md](ROADMAP.md) for the honest implementation status.
 
 ## Build and test
@@ -42,6 +43,7 @@ cargo run -- shell
 cargo run -- start
 cargo run -- new work
 cargo run -- list
+cargo run -- attach work
 ```
 
 The PTY shell uses raw keyboard input and propagates host-terminal size changes
@@ -51,8 +53,11 @@ entry and exit messages and preserves the directory from which it was launched.
 `novamux start` opens the alternate-screen multiplexer. Its controls are
 `Ctrl-B %` for a left/right split, `Ctrl-B "` for a top/bottom split,
 `Ctrl-B o` to focus the next pane, `Ctrl-B x` to close the focused pane, and
-`Ctrl-B q` to quit. The final pane cannot be closed. This is an attached local
-client; connecting that TUI to daemon-owned sessions is not implemented yet.
+`Ctrl-B q` to quit. The final pane cannot be closed.
+
+For a named daemon session, run `novamux attach NAME`. `Ctrl-B d` detaches
+without stopping its shells; running `attach` again restores the latest bounded
+screen state. An unexpected client disconnect is also treated as a detach.
 
 End users will not need Rust once packaging is implemented.
 

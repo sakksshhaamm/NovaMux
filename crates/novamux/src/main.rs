@@ -18,6 +18,7 @@ USAGE:
     novamux shell
     novamux start
     novamux new SESSION_NAME
+    novamux attach SESSION_NAME
     novamux list
     novamux demo [SESSION_NAME]
     novamux help
@@ -34,6 +35,10 @@ fn main() -> ExitCode {
             Some(name) if arguments.next().is_none() => run_new(&name),
             _ => usage_error("new requires exactly one session name"),
         },
+        Some("attach") => match arguments.next() {
+            Some(name) if arguments.next().is_none() => run_attach(&name),
+            _ => usage_error("attach requires exactly one session name"),
+        },
         Some("list") if arguments.next().is_none() => run_list(),
         Some("__server") if arguments.next().is_none() => run_server(),
         Some("shell") => run_shell(),
@@ -45,6 +50,23 @@ fn main() -> ExitCode {
         Some(command) => {
             eprintln!("unknown command: {command}\n\n{HELP}");
             ExitCode::from(2)
+        }
+    }
+}
+
+fn run_attach(value: &str) -> ExitCode {
+    let name = match SessionName::parse(value) {
+        Ok(name) => name,
+        Err(error) => return usage_error(&format!("invalid session name: {error}")),
+    };
+    match tui::run_attached(name) {
+        Ok(()) => {
+            println!("NovaMux: detached");
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("NovaMux attach failed: {error}");
+            ExitCode::FAILURE
         }
     }
 }

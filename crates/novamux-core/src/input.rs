@@ -13,6 +13,8 @@ pub enum MultiplexerCommand {
     FocusNext,
     /// Close the focused pane after confirmation by the UI layer.
     CloseFocused,
+    /// Disconnect this client while preserving a daemon-owned session.
+    Detach,
     /// Exit the attached client after confirmation by the UI layer.
     Quit,
 }
@@ -63,6 +65,7 @@ impl InputRouter {
             b'"' => InputAction::Command(MultiplexerCommand::SplitVertical),
             b'o' => InputAction::Command(MultiplexerCommand::FocusNext),
             b'x' => InputAction::Command(MultiplexerCommand::CloseFocused),
+            b'd' => InputAction::Command(MultiplexerCommand::Detach),
             b'q' => InputAction::Command(MultiplexerCommand::Quit),
             COMMAND_PREFIX => InputAction::Forward(vec![COMMAND_PREFIX]),
             other => InputAction::Forward(vec![COMMAND_PREFIX, other]),
@@ -99,6 +102,7 @@ mod tests {
             (b'"', MultiplexerCommand::SplitVertical),
             (b'o', MultiplexerCommand::FocusNext),
             (b'x', MultiplexerCommand::CloseFocused),
+            (b'd', MultiplexerCommand::Detach),
             (b'q', MultiplexerCommand::Quit),
         ];
 

@@ -8,12 +8,13 @@ use crossterm::queue;
 use crossterm::style::{Attribute, Print, SetAttribute};
 use crossterm::terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
 use novamux_core::{
-    InputAction, InputRouter, MultiplexerCommand, PaneId, PaneRegistry, Rect, Session, SessionName,
-    SplitDirection,
+    InputAction, InputRouter, MultiplexerCommand, PaneId, PaneRegistry, PaneSnapshot, Rect,
+    Request, Response, Session, SessionName, SplitDirection,
 };
 use novamux_terminal::TerminalSize;
 
 use crate::live_pty::LivePty;
+use crate::session_service::AttachedClient;
 
 type AppResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 
@@ -35,6 +36,143 @@ pub fn run() -> AppResult<()> {
     let result = app.event_loop();
     app.shutdown();
     result
+}
+
+/// Attaches the current terminal to a daemon-owned named session.
+///
+/// # Errors
+///
+/// Returns if the terminal is non-interactive, daemon communication fails, or
+/// terminal rendering/state restoration fails.
+pub fn run_attached(name: SessionName) -> AppResult<()> {
+    if !io::stdin().is_terminal() || !io::stdout().is_terminal() {
+        return Err("novamux attach requires an interactive terminal".into());
+    }
+    let mut client = AttachedClient::connect(name)?;
+    let _screen = ScreenGuard::enter()?;
+    let mut router = InputRouter::new();
+    let mut size = terminal::size()?;
+    let mut response = client.exchange(&Request::Resize {
+        cols: size.0,
+        rows: size.1,
+    })?;
+    let mut stdout = io::stdout().lock();
+    loop {
+        render_remote(&mut stdout, size, screen(&response)?)?;
+        if event::poll(Duration::from_millis(33))? {
+            match event::read()? {
+                Event::Key(key) if key.kind != KeyEventKind::Release => {
+                    for byte in key_bytes(key) {
+                        response = match router.route(byte) {
+                            InputAction::Pending => continue,
+                            InputAction::Forward(bytes) => {
+                                client.exchange(&Request::Input(bytes))?
+                            }
+                            InputAction::Command(
+                                MultiplexerCommand::Detach | MultiplexerCommand::Quit,
+                            ) => {
+                                client.detach()?;
+                                return Ok(());
+                            }
+                            InputAction::Command(command) => {
+                                client.exchange(&Request::Command(command_code(command)))?
+                            }
+                        };
+                    }
+                }
+                Event::Resize(cols, rows) => {
+                    size = (cols, rows);
+                    response = client.exchange(&Request::Resize { cols, rows })?;
+                }
+                _ => {}
+            }
+        } else {
+            response = client.exchange(&Request::Snapshot)?;
+        }
+    }
+}
+
+fn screen(response: &Response) -> AppResult<&[PaneSnapshot]> {
+    match response {
+        Response::Screen(panes) => Ok(panes),
+        Response::Error { message, .. } => Err(message.clone().into()),
+        _ => Err("unexpected daemon screen response".into()),
+    }
+}
+
+const fn command_code(command: MultiplexerCommand) -> u8 {
+    match command {
+        MultiplexerCommand::SplitHorizontal => 1,
+        MultiplexerCommand::SplitVertical => 2,
+        MultiplexerCommand::FocusNext => 3,
+        MultiplexerCommand::CloseFocused => 4,
+        MultiplexerCommand::Detach | MultiplexerCommand::Quit => 0,
+    }
+}
+
+fn render_remote(
+    output: &mut impl Write,
+    size: (u16, u16),
+    panes: &[PaneSnapshot],
+) -> AppResult<()> {
+    queue!(output, Hide, Clear(ClearType::All))?;
+    for pane in panes {
+        let rect = Rect {
+            x: pane.x,
+            y: pane.y,
+            width: pane.width,
+            height: pane.height,
+        };
+        draw_remote_border(output, rect, pane.id, pane.focused)?;
+        if rect.width > 2 && rect.height > 2 {
+            draw_text(output, rect, &pane.text)?;
+        }
+    }
+    queue!(
+        output,
+        MoveTo(0, size.1.saturating_sub(1)),
+        SetAttribute(Attribute::Reverse),
+        Print(fit(
+            " NovaMux attached  Ctrl-B d detach | % split | \" split | o focus | x close ",
+            size.0
+        )),
+        SetAttribute(Attribute::Reset)
+    )?;
+    output.flush()?;
+    Ok(())
+}
+
+fn draw_remote_border(
+    output: &mut impl Write,
+    rect: Rect,
+    pane: u64,
+    focused: bool,
+) -> io::Result<()> {
+    if rect.width == 0 || rect.height == 0 {
+        return Ok(());
+    }
+    let glyph = if focused { '#' } else { '+' };
+    for x in rect.x..rect.x.saturating_add(rect.width) {
+        queue!(output, MoveTo(x, rect.y), Print(glyph))?;
+        if rect.height > 1 {
+            queue!(output, MoveTo(x, rect.y + rect.height - 1), Print(glyph))?;
+        }
+    }
+    for y in rect.y..rect.y.saturating_add(rect.height) {
+        queue!(output, MoveTo(rect.x, y), Print(glyph))?;
+        if rect.width > 1 {
+            queue!(output, MoveTo(rect.x + rect.width - 1, y), Print(glyph))?;
+        }
+    }
+    queue!(
+        output,
+        MoveTo(rect.x.saturating_add(1), rect.y),
+        Print(fit(
+            &format!(" pane {pane}{} ", if focused { " *" } else { "" }),
+            rect.width.saturating_sub(2)
+        ))
+    )?;
+    Ok(())
 }
 
 struct App {
@@ -126,7 +264,7 @@ impl App {
             }
             MultiplexerCommand::FocusNext => self.session.focus_next(),
             MultiplexerCommand::CloseFocused => self.close_focused()?,
-            MultiplexerCommand::Quit => return Ok(true),
+            MultiplexerCommand::Detach | MultiplexerCommand::Quit => return Ok(true),
         }
         Ok(false)
     }

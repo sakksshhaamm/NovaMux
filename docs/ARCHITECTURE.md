@@ -20,10 +20,12 @@ NovaMux is a modular Cargo workspace.
   event loop. Its separate local-transport module binds a private Unix-domain
   endpoint and authenticates peers before handing a byte stream to bounded
   protocol dispatch. Its daemon owns a `Session` and `PaneRegistry<LivePty>` for
-  every validated name. `demo` renders a fixed layout preview, while `shell`
+  every validated name. A thin attached client exchanges bounded input,
+  resize, command, and screen-snapshot frames with that daemon. `demo` renders
+  a fixed layout preview, while `shell`
   remains the single-PTY test interface.
 
-Future attach streaming, SSH/SFTP, filesystem, UI, and plugin components will
+Future SSH/SFTP, filesystem, UI, and plugin components will
 use separate modules or crates with narrow interfaces.
 
 ## Session protocol
@@ -33,6 +35,9 @@ message type, and big-endian payload length. A complete frame is capped at 8
 KiB. Session names are revalidated while decoding, session lists are capped at
 64 entries, and peer-provided error descriptions are capped at 256 bytes.
 Request and response type namespaces are decoded separately.
+Attached input batches are capped at 4 KiB, snapshots at 32 panes and one 8 KiB
+frame, and screen text is truncated at UTF-8 boundaries. Only one connection
+may attach to a named session; disconnect releases that reservation.
 
 The codec does not establish trust. The local transport establishes a
 same-effective-user boundary using a private runtime directory and
@@ -57,5 +62,6 @@ SSH service; NovaMux will attach to that user's local session after login.
 - A live PTY launches only NovaMux's fixed platform shell path, validates its
   working directory, and reaps its child during explicit or automatic cleanup.
 - All session names pass a portable allow-list before reaching storage or IPC.
+- Attached clients never own daemon PTYs; detach and disconnect preserve them.
 - Core layout calculations are deterministic and use saturating arithmetic at
   terminal coordinate boundaries.
