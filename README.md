@@ -24,6 +24,8 @@ The current development build provides:
 - `novamux attach NAME` with live input, splits, focus, resize, and detach.
 - bounded local scrollback navigation entered with `Ctrl-B [`; selection and
   system clipboard copying are not implemented yet.
+- strict offline local configuration with default, high-contrast, and Sakura
+  themes, validated named and 24-bit colors, and optional subtle accents.
 
 The daemon keeps shell processes alive independently of the creating client,
 including while its single attached client is disconnected. NovaMux does not
@@ -64,6 +66,14 @@ without stopping its shells; running `attach` again restores the latest bounded
 screen state. An unexpected client disconnect is also treated as a detach.
 
 End users will not need Rust once packaging is implemented.
+
+## Configuration
+
+The optional configuration file changes local `start` and `attach` colors. It
+uses a strict declarative format and safe defaults when absent. See
+[docs/CONFIGURATION.md](docs/CONFIGURATION.md) and the
+[example configuration](examples/config). It never executes commands, loads
+plugins or includes, accesses the network, or expands variables.
 
 ## License
 

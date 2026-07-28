@@ -14,6 +14,7 @@ Status is intentionally conservative. `[x]` means implemented and tested.
 - [ ] Persistent session manager (live daemon ownership works; restart restore remains)
 - [x] Interactive attached split-pane TUI
 - [x] Plain-text terminal parser and renderer
+- [x] Strict local configuration and built-in themes
 - [ ] Scrollback and copy mode
   - [x] Bounded client-local viewport navigation and literal search primitives
   - [ ] Daemon history snapshot protocol, selection, and clipboard integration
