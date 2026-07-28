@@ -7,7 +7,8 @@ use std::time::Duration;
 
 use crossterm::terminal;
 use novamux::tui;
-use novamux_core::{Rect, Session, SessionName, SplitDirection};
+use novamux::{session_service, session_transport};
+use novamux_core::{Rect, Request, Response, Session, SessionName, SplitDirection};
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 
 const HELP: &str = "\
@@ -16,6 +17,9 @@ NovaMux 0.1.0
 USAGE:
     novamux shell
     novamux start
+    novamux new SESSION_NAME
+    novamux attach SESSION_NAME
+    novamux list
     novamux demo [SESSION_NAME]
     novamux help
 
@@ -27,6 +31,16 @@ fn main() -> ExitCode {
     let mut arguments = env::args().skip(1);
     match arguments.next().as_deref() {
         Some("start") => run_start(),
+        Some("new") => match arguments.next() {
+            Some(name) if arguments.next().is_none() => run_new(&name),
+            _ => usage_error("new requires exactly one session name"),
+        },
+        Some("attach") => match arguments.next() {
+            Some(name) if arguments.next().is_none() => run_attach(&name),
+            _ => usage_error("attach requires exactly one session name"),
+        },
+        Some("list") if arguments.next().is_none() => run_list(),
+        Some("__server") if arguments.next().is_none() => run_server(),
         Some("shell") => run_shell(),
         Some("demo") => run_demo(arguments.next().as_deref().unwrap_or("dev")),
         Some("help" | "--help" | "-h") | None => {
@@ -36,6 +50,97 @@ fn main() -> ExitCode {
         Some(command) => {
             eprintln!("unknown command: {command}\n\n{HELP}");
             ExitCode::from(2)
+        }
+    }
+}
+
+fn run_attach(value: &str) -> ExitCode {
+    let name = match SessionName::parse(value) {
+        Ok(name) => name,
+        Err(error) => return usage_error(&format!("invalid session name: {error}")),
+    };
+    match tui::run_attached(name) {
+        Ok(()) => {
+            println!("NovaMux: detached");
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("NovaMux attach failed: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn usage_error(message: &str) -> ExitCode {
+    eprintln!("{message}\n\n{HELP}");
+    ExitCode::from(2)
+}
+
+fn run_server() -> ExitCode {
+    match session_service::run_daemon() {
+        Ok(())
+        | Err(session_service::ServiceError::Transport(
+            session_transport::TransportError::AlreadyRunning,
+        )) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("NovaMux session daemon failed: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run_new(value: &str) -> ExitCode {
+    let name = match SessionName::parse(value) {
+        Ok(name) => name,
+        Err(error) => return usage_error(&format!("invalid session name: {error}")),
+    };
+    match session_service::request_with_autostart(&Request::Create(name)) {
+        Ok(Response::Created(name)) => {
+            println!("created session {}", name.as_str());
+            ExitCode::SUCCESS
+        }
+        Ok(Response::Error { message, .. }) => {
+            eprintln!("NovaMux: {message}");
+            ExitCode::FAILURE
+        }
+        Ok(_) => {
+            eprintln!("NovaMux: unexpected daemon response");
+            ExitCode::FAILURE
+        }
+        Err(error) => {
+            eprintln!("NovaMux: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run_list() -> ExitCode {
+    match session_service::request_with_autostart(&Request::List) {
+        Ok(Response::Sessions(sessions)) => {
+            if sessions.is_empty() {
+                println!("no sessions");
+            } else {
+                for session in sessions {
+                    println!(
+                        "{}\t{} attached",
+                        session.name.as_str(),
+                        session.attached_clients
+                    );
+                }
+            }
+            ExitCode::SUCCESS
+        }
+        Ok(Response::Error { message, .. }) => {
+            eprintln!("NovaMux: {message}");
+            ExitCode::FAILURE
+        }
+        Ok(_) => {
+            eprintln!("NovaMux: unexpected daemon response");
+            ExitCode::FAILURE
+        }
+        Err(error) => {
+            eprintln!("NovaMux: {error}");
+            ExitCode::FAILURE
         }
     }
 }

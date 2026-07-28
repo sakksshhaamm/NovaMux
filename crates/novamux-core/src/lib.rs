@@ -4,8 +4,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 mod input;
+mod protocol;
 
 pub use input::{InputAction, InputRouter, MultiplexerCommand};
+pub use protocol::{
+    DecodeError, ErrorCode, MAX_ERROR_MESSAGE_BYTES, MAX_FRAME_BYTES, MAX_INPUT_BYTES,
+    MAX_LISTED_SESSIONS, MAX_SNAPSHOT_PANES, PROTOCOL_VERSION, PaneSnapshot, Request, Response,
+    SessionInfo, decode_request, decode_response, encode_request, encode_response,
+};
 
 /// A stable identifier for a pane within one session.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]

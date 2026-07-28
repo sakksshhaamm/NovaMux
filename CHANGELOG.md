@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+- Added a dependency-free, size-bounded session IPC protocol codec for the
+  upcoming create/list/attach/detach daemon milestone.
+- Added a private macOS/Linux Unix-domain endpoint with restrictive runtime
+  permissions, safe stale-socket recovery, path limits, I/O timeouts, and
+  fail-closed kernel peer authentication.
+- Added an explicit unsupported session transport on Windows pending an
+  equivalently secure named-pipe implementation.
+- Added a per-user session daemon that owns named shell PTYs after the creating
+  client exits, with bounded `Ping`, `Create`, and `List` request handling.
+- Added `novamux new NAME` and `novamux list`, including fixed-current-executable
+  daemon autostart and a strict 64-session limit.
+- Added `novamux attach NAME`, bounded daemon screen snapshots, focused-pane
+  input and resize forwarding, split/focus/close commands, and `Ctrl-B d`
+  detach with daemon-owned PTY survival.
+- Enforced one attached client per session and made unexpected disconnects
+  release attachment state safely.
+
 ## 0.1.0 - 2026-07-28
 
 ### Added

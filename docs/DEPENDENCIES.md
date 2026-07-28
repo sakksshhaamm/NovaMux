@@ -34,7 +34,26 @@
 - **Possible replacement:** a NovaMux terminal-state machine built on `vte`,
   after comprehensive compatibility and fuzz testing exists.
 
-The platform-independent `novamux-core` crate remains standard-library-only.
+### `nix` 0.28.0 (Unix only)
+
+- **Required for:** safe wrappers around kernel-provided Unix-socket peer
+  credentials and effective-user identity. Only the `socket` and `user`
+  features are enabled.
+- **Security:** peer identity must come from the kernel before any session
+  request is parsed. The crate contains platform-specific unsafe code
+  internally; NovaMux continues to forbid unsafe code in its workspace.
+- **Maintenance:** the 0.28 line is established and already existed in the
+  dependency graph through PTY support. It is pinned directly so enabled
+  features and API changes remain reviewable.
+- **Possible replacement:** stable standard-library peer-credential APIs, or a
+  small separately audited operating-system adapter.
+
+The platform-independent `novamux-core` crate, including its bounded binary
+session protocol codec, remains standard-library-only. A small fixed codec was
+preferred to a general serialization crate to keep the pre-authentication
+parser narrow, auditable, and free of additional transitive dependencies. It
+can be replaced by a formally specified serializer later if compatibility
+requirements justify the added dependency surface.
 After dependencies are fetched, builds work offline.
 
 Every future external crate must document:

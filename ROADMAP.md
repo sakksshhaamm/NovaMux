@@ -4,14 +4,14 @@ Status is intentionally conservative. `[x]` means implemented and tested.
 
 - [ ] Core multiplexer
   - [x] Pane tree, splits, focus, close, and layout
-  - [ ] Session daemon and authenticated local IPC
-  - [ ] Detach and reattach
+  - [x] Session daemon and authenticated local create/list IPC
+  - [x] Single-client detach and reattach
 - [ ] PTY engine
   - [x] Spawn a fixed local shell with PTY input/output
   - [x] Dynamic resize and raw input mode
   - [x] Explicit child shutdown and reaping for attached panes
   - [ ] Full signal policy
-- [ ] Persistent session manager
+- [ ] Persistent session manager (live daemon ownership works; restart restore remains)
 - [x] Interactive attached split-pane TUI
 - [x] Plain-text terminal parser and renderer
 - [ ] Mouse support
