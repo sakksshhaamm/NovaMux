@@ -3,9 +3,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
+mod copy_mode;
 mod input;
 mod protocol;
 
+pub use copy_mode::{CopyMode, CopyModeAction};
 pub use input::{InputAction, InputRouter, MultiplexerCommand};
 pub use protocol::{
     DecodeError, ErrorCode, MAX_ERROR_MESSAGE_BYTES, MAX_FRAME_BYTES, MAX_INPUT_BYTES,

@@ -15,6 +15,8 @@ pub enum MultiplexerCommand {
     CloseFocused,
     /// Disconnect this client while preserving a daemon-owned session.
     Detach,
+    /// Enter client-local scrollback and copy mode.
+    EnterCopyMode,
     /// Exit the attached client after confirmation by the UI layer.
     Quit,
 }
@@ -66,6 +68,7 @@ impl InputRouter {
             b'o' => InputAction::Command(MultiplexerCommand::FocusNext),
             b'x' => InputAction::Command(MultiplexerCommand::CloseFocused),
             b'd' => InputAction::Command(MultiplexerCommand::Detach),
+            b'[' => InputAction::Command(MultiplexerCommand::EnterCopyMode),
             b'q' => InputAction::Command(MultiplexerCommand::Quit),
             COMMAND_PREFIX => InputAction::Forward(vec![COMMAND_PREFIX]),
             other => InputAction::Forward(vec![COMMAND_PREFIX, other]),
@@ -103,6 +106,7 @@ mod tests {
             (b'o', MultiplexerCommand::FocusNext),
             (b'x', MultiplexerCommand::CloseFocused),
             (b'd', MultiplexerCommand::Detach),
+            (b'[', MultiplexerCommand::EnterCopyMode),
             (b'q', MultiplexerCommand::Quit),
         ];
 

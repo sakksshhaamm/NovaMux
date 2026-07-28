@@ -8,8 +8,8 @@ use crossterm::queue;
 use crossterm::style::{Attribute, Print, SetAttribute};
 use crossterm::terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
 use novamux_core::{
-    InputAction, InputRouter, MultiplexerCommand, PaneId, PaneRegistry, PaneSnapshot, Rect,
-    Request, Response, Session, SessionName, SplitDirection,
+    CopyMode, CopyModeAction, InputAction, InputRouter, MultiplexerCommand, PaneId, PaneRegistry,
+    PaneSnapshot, Rect, Request, Response, Session, SessionName, SplitDirection,
 };
 use novamux_terminal::TerminalSize;
 
@@ -51,6 +51,7 @@ pub fn run_attached(name: SessionName) -> AppResult<()> {
     let mut client = AttachedClient::connect(name)?;
     let _screen = ScreenGuard::enter()?;
     let mut router = InputRouter::new();
+    let mut copy_mode = CopyMode::default();
     let mut size = terminal::size()?;
     let mut response = client.exchange(&Request::Resize {
         cols: size.0,
@@ -58,10 +59,16 @@ pub fn run_attached(name: SessionName) -> AppResult<()> {
     })?;
     let mut stdout = io::stdout().lock();
     loop {
-        render_remote(&mut stdout, size, screen(&response)?)?;
+        render_remote(&mut stdout, size, screen(&response)?, copy_mode.is_active())?;
         if event::poll(Duration::from_millis(33))? {
             match event::read()? {
                 Event::Key(key) if key.kind != KeyEventKind::Release => {
+                    if copy_mode.is_active() {
+                        if matches!(copy_mode_action(key), Some(CopyModeAction::Exit)) {
+                            copy_mode.exit();
+                        }
+                        continue;
+                    }
                     for byte in key_bytes(key) {
                         response = match router.route(byte) {
                             InputAction::Pending => continue,
@@ -73,6 +80,10 @@ pub fn run_attached(name: SessionName) -> AppResult<()> {
                             ) => {
                                 client.detach()?;
                                 return Ok(());
+                            }
+                            InputAction::Command(MultiplexerCommand::EnterCopyMode) => {
+                                copy_mode.enter();
+                                continue;
                             }
                             InputAction::Command(command) => {
                                 client.exchange(&Request::Command(command_code(command)))?
@@ -106,7 +117,9 @@ const fn command_code(command: MultiplexerCommand) -> u8 {
         MultiplexerCommand::SplitVertical => 2,
         MultiplexerCommand::FocusNext => 3,
         MultiplexerCommand::CloseFocused => 4,
-        MultiplexerCommand::Detach | MultiplexerCommand::Quit => 0,
+        MultiplexerCommand::Detach
+        | MultiplexerCommand::Quit
+        | MultiplexerCommand::EnterCopyMode => 0,
     }
 }
 
@@ -114,6 +127,7 @@ fn render_remote(
     output: &mut impl Write,
     size: (u16, u16),
     panes: &[PaneSnapshot],
+    copy_mode: bool,
 ) -> AppResult<()> {
     queue!(output, Hide, Clear(ClearType::All))?;
     for pane in panes {
@@ -133,7 +147,11 @@ fn render_remote(
         MoveTo(0, size.1.saturating_sub(1)),
         SetAttribute(Attribute::Reverse),
         Print(fit(
-            " NovaMux attached  Ctrl-B d detach | % split | \" split | o focus | x close ",
+            if copy_mode {
+                " COPY MODE (current remote viewport)  Esc/q exit "
+            } else {
+                " NovaMux attached  Ctrl-B [ copy | d detach | % split | \" split | o focus | x close "
+            },
             size.0
         )),
         SetAttribute(Attribute::Reset)
@@ -180,6 +198,7 @@ struct App {
     panes: PaneRegistry<LivePty>,
     router: InputRouter,
     last_size: (u16, u16),
+    copy_mode: CopyMode,
 }
 
 impl App {
@@ -193,6 +212,7 @@ impl App {
             panes,
             router: InputRouter::new(),
             last_size: size,
+            copy_mode: CopyMode::default(),
         };
         app.resize_panes(size)?;
         Ok(app)
@@ -211,6 +231,10 @@ impl App {
             if event::poll(Duration::from_millis(33))? {
                 match event::read()? {
                     Event::Key(key) if key.kind != KeyEventKind::Release => {
+                        if self.copy_mode.is_active() {
+                            self.navigate_copy_mode(key, size)?;
+                            continue;
+                        }
                         for byte in key_bytes(key) {
                             match self.router.route(byte) {
                                 InputAction::Pending => {}
@@ -264,6 +288,7 @@ impl App {
             }
             MultiplexerCommand::FocusNext => self.session.focus_next(),
             MultiplexerCommand::CloseFocused => self.close_focused()?,
+            MultiplexerCommand::EnterCopyMode => self.copy_mode.enter(),
             MultiplexerCommand::Detach | MultiplexerCommand::Quit => return Ok(true),
         }
         Ok(false)
@@ -319,7 +344,13 @@ impl App {
                     .panes
                     .get(pane)
                     .map(|runtime| {
-                        runtime.with_terminal(novamux_terminal::TerminalBuffer::visible_text)
+                        runtime.with_terminal(|terminal| {
+                            if focused && self.copy_mode.is_active() {
+                                terminal.viewport_text(self.copy_mode.offset())
+                            } else {
+                                terminal.visible_text()
+                            }
+                        })
                     })
                     .transpose()?
                     .unwrap_or_default();
@@ -331,14 +362,36 @@ impl App {
             output,
             MoveTo(0, status_y),
             SetAttribute(Attribute::Reverse),
-            Print(fit(
-                " NovaMux  Ctrl-B % split | \" split | o focus | x close | q quit ",
-                size.0
-            )),
+            Print(fit(self.status_text(), size.0)),
             SetAttribute(Attribute::Reset)
         )?;
         output.flush()?;
         Ok(())
+    }
+
+    fn navigate_copy_mode(&mut self, key: KeyEvent, size: (u16, u16)) -> AppResult<()> {
+        let Some(action) = copy_mode_action(key) else {
+            return Ok(());
+        };
+        let maximum = self
+            .panes
+            .get(self.session.focused())
+            .map(|runtime| {
+                runtime.with_terminal(novamux_terminal::TerminalBuffer::max_scrollback_offset)
+            })
+            .transpose()?
+            .unwrap_or_default();
+        let page_rows = usize::from(size.1.saturating_sub(STATUS_ROWS + 2).max(1));
+        self.copy_mode.apply(action, page_rows, maximum);
+        Ok(())
+    }
+
+    fn status_text(&self) -> &'static str {
+        if self.copy_mode.is_active() {
+            " COPY MODE  ↑/k older | ↓/j newer | PgUp/PgDn page | Esc/q exit "
+        } else {
+            " NovaMux  Ctrl-B [ copy | % split | \" split | o focus | x close | q quit "
+        }
     }
 
     fn shutdown(&mut self) {
@@ -347,6 +400,17 @@ impl App {
                 let _ = runtime.terminate();
             }
         }
+    }
+}
+
+fn copy_mode_action(key: KeyEvent) -> Option<CopyModeAction> {
+    match key.code {
+        KeyCode::Up | KeyCode::Char('k') => Some(CopyModeAction::OlderLine),
+        KeyCode::Down | KeyCode::Char('j') => Some(CopyModeAction::NewerLine),
+        KeyCode::PageUp => Some(CopyModeAction::OlderPage),
+        KeyCode::PageDown => Some(CopyModeAction::NewerPage),
+        KeyCode::Esc | KeyCode::Char('q') => Some(CopyModeAction::Exit),
+        _ => None,
     }
 }
 
@@ -516,5 +580,21 @@ mod tests {
     fn fit_truncates_and_pads_to_the_requested_width() {
         assert_eq!(fit("abcdef", 4), "abcd");
         assert_eq!(fit("ab", 4), "ab  ");
+    }
+
+    #[test]
+    fn maps_copy_mode_navigation_without_forwarding_shell_input() {
+        assert_eq!(
+            copy_mode_action(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE)),
+            Some(CopyModeAction::OlderPage)
+        );
+        assert_eq!(
+            copy_mode_action(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+            Some(CopyModeAction::Exit)
+        );
+        assert_eq!(
+            copy_mode_action(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE)),
+            None
+        );
     }
 }
