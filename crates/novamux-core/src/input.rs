@@ -17,6 +17,8 @@ pub enum MultiplexerCommand {
     Detach,
     /// Enter client-local scrollback and copy mode.
     EnterCopyMode,
+    /// Toggle the client-local, read-only file explorer.
+    ToggleFileExplorer,
     /// Exit the attached client after confirmation by the UI layer.
     Quit,
 }
@@ -69,6 +71,7 @@ impl InputRouter {
             b'x' => InputAction::Command(MultiplexerCommand::CloseFocused),
             b'd' => InputAction::Command(MultiplexerCommand::Detach),
             b'[' => InputAction::Command(MultiplexerCommand::EnterCopyMode),
+            b'f' => InputAction::Command(MultiplexerCommand::ToggleFileExplorer),
             b'q' => InputAction::Command(MultiplexerCommand::Quit),
             COMMAND_PREFIX => InputAction::Forward(vec![COMMAND_PREFIX]),
             other => InputAction::Forward(vec![COMMAND_PREFIX, other]),
@@ -107,6 +110,7 @@ mod tests {
             (b'x', MultiplexerCommand::CloseFocused),
             (b'd', MultiplexerCommand::Detach),
             (b'[', MultiplexerCommand::EnterCopyMode),
+            (b'f', MultiplexerCommand::ToggleFileExplorer),
             (b'q', MultiplexerCommand::Quit),
         ];
 

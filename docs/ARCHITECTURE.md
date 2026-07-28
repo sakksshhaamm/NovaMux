@@ -27,6 +27,10 @@ NovaMux is a modular Cargo workspace.
 - `novamux::config`: a dependency-free, bounded parser for optional local
   client configuration. It selects a built-in theme and validated color
   overrides before entering the TUI. Values never enter the daemon protocol.
+- `novamux::file_explorer`: client-local, read-only directory state. It
+  canonicalizes one launch-directory root, sorts a bounded listing
+  deterministically, models selection/scrolling independently of rendering,
+  and refuses symlink traversal or parent navigation outside that root.
 
 Future SSH/SFTP, filesystem, UI, and plugin components will
 use separate modules or crates with narrow interfaces.
@@ -81,3 +85,7 @@ SSH service; NovaMux will attach to that user's local session after login.
   rendered at exactly eight frames per second while active, and never enter the
   session protocol or daemon. The renderer calculates Unicode display-cell
   width before centering or clipping emoji scenes.
+- File exploration never enters the session protocol. Both local and attached
+  clients root it at their own canonical launch directory. Directory entries
+  are capped at 4,096, sorted with directories first, and inspected with
+  no-follow metadata. The explorer has no mutation or process-execution API.

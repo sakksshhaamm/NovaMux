@@ -19,7 +19,11 @@ Status is intentionally conservative. `[x]` means implemented and tested.
   - [x] Bounded client-local viewport navigation and literal search primitives
   - [ ] Daemon history snapshot protocol, selection, and clipboard integration
 - [ ] Mouse support
+  - [x] File selection, directory activation, and wheel navigation in the TUI
+  - [ ] Pane focus, text selection, and native desktop drag-and-drop
 - [ ] Native file explorer
+  - [x] Root-confined read-only TUI explorer
+  - [ ] Preview and confirmed filesystem mutations
 - [ ] File preview
 - [ ] Confirmed file copy, move, and delete
 - [ ] Drag and drop

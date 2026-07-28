@@ -28,6 +28,7 @@ The current development build provides:
   Sakura, Cyberpunk, Ocean, Forest, Nord, and Sunset), validated named and
   24-bit colors, optional subtle accents, and client-only Panda and cat idle
   scenes.
+- a root-confined, read-only file explorer with keyboard and mouse navigation.
 
 The daemon keeps shell processes alive independently of the creating client,
 including while its single attached client is disconnected. NovaMux does not
@@ -63,9 +64,20 @@ entry and exit messages and preserves the directory from which it was launched.
 line, Page Up/Page Down move by page, and Escape or `q` exits. The final pane
 cannot be closed.
 
+`Ctrl-B f` opens the read-only file explorer rooted at the directory from which
+that client was launched. Click once or use the arrow keys to select; double
+click or press Enter to open a directory; use the mouse wheel or Page Up/Page
+Down to scroll; Left/Backspace or right-click goes to the parent; Escape closes
+the explorer. Parent navigation cannot cross the original canonical root.
+Symlinks are labeled `LINK` and are not followed. This checkpoint cannot
+preview, copy, move, delete, drag, execute, or otherwise modify files.
+
 For a named daemon session, run `novamux attach NAME`. `Ctrl-B d` detaches
 without stopping its shells; running `attach` again restores the latest bounded
 screen state. An unexpected client disconnect is also treated as a detach.
+For `attach`, the explorer remains client-local: it browses the filesystem of
+the machine where the `attach` command runs, not daemon state or a separate
+desktop. When NovaMux is run after SSH login, that machine is the SSH host.
 
 End users will not need Rust once packaging is implemented.
 

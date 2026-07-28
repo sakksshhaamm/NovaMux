@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added a client-local, root-confined read-only TUI file explorer opened with
+  `Ctrl-B f`, with stable directory-first listings, metadata, keyboard and mouse
+  navigation, bounded scrolling, explicit errors, and no mutation operations.
+- Added alternate-screen mouse capture with guarded restoration, while labeling
+  symlinks without following them and preventing navigation above the
+  canonical launch-directory root.
 - Added seven curated built-in themes: Dracula, Cyberpunk, Ocean, Forest, Nord,
   Solarized Dark, and Sunset.
 - Added opt-in original `panda-climb` and `cat-play` screensavers with
