@@ -30,6 +30,8 @@ SSH service; NovaMux will attach to that user's local session after login.
 - A live session always contains at least one pane.
 - Exactly one pane is focused.
 - Pane identifiers are unique within a session and never reused.
+- Runtime resources reconcile atomically with pane IDs; a failed PTY spawn
+  cannot leave a partially registered pane set.
 - All session names pass a portable allow-list before reaching storage or IPC.
 - Core layout calculations are deterministic and use saturating arithmetic at
   terminal coordinate boundaries.

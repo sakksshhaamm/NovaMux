@@ -1,5 +1,6 @@
 //! Platform-independent state and layout primitives for `NovaMux`.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 mod input;
@@ -7,7 +8,7 @@ mod input;
 pub use input::{InputAction, InputRouter, MultiplexerCommand};
 
 /// A stable identifier for a pane within one session.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct PaneId(u64);
 
 impl PaneId {
@@ -119,6 +120,103 @@ pub struct Session {
     root: Node,
     focused: PaneId,
     next_id: u64,
+}
+
+/// Runtime resources owned by the panes in one session.
+///
+/// The core does not know whether a resource is a PTY, renderer, or test
+/// double. Reconciliation guarantees that resources exist exactly for the
+/// session's current pane IDs. Removed resources are returned to the caller so
+/// process termination can be performed explicitly.
+#[derive(Debug)]
+pub struct PaneRegistry<T> {
+    resources: BTreeMap<PaneId, T>,
+}
+
+impl<T> Default for PaneRegistry<T> {
+    fn default() -> Self {
+        Self {
+            resources: BTreeMap::new(),
+        }
+    }
+}
+
+impl<T> PaneRegistry<T> {
+    /// Creates an empty registry.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            resources: BTreeMap::new(),
+        }
+    }
+
+    /// Returns the number of owned pane resources.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.resources.len()
+    }
+
+    /// Returns `true` when no pane resources are owned.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.resources.is_empty()
+    }
+
+    /// Borrows the resource for a pane.
+    #[must_use]
+    pub fn get(&self, pane: PaneId) -> Option<&T> {
+        self.resources.get(&pane)
+    }
+
+    /// Mutably borrows the resource for a pane.
+    pub fn get_mut(&mut self, pane: PaneId) -> Option<&mut T> {
+        self.resources.get_mut(&pane)
+    }
+
+    /// Reconciles resources with the current session pane tree.
+    ///
+    /// Missing resources are created before the registry is modified. If
+    /// creation fails, all newly created resources are dropped and the
+    /// registry remains unchanged. Resources for removed panes are returned in
+    /// ascending pane-ID order.
+    ///
+    /// # Errors
+    ///
+    /// Returns the first error produced while creating a missing resource.
+    pub fn reconcile<E>(
+        &mut self,
+        session: &Session,
+        mut create: impl FnMut(PaneId) -> Result<T, E>,
+    ) -> Result<Vec<(PaneId, T)>, E> {
+        let wanted: BTreeSet<_> = session.panes().into_iter().collect();
+        let missing: Vec<_> = wanted
+            .iter()
+            .filter(|pane| !self.resources.contains_key(pane))
+            .copied()
+            .collect();
+
+        let mut created = Vec::with_capacity(missing.len());
+        for pane in missing {
+            created.push((pane, create(pane)?));
+        }
+
+        let removed_ids: Vec<_> = self
+            .resources
+            .keys()
+            .filter(|pane| !wanted.contains(pane))
+            .copied()
+            .collect();
+        let removed = removed_ids
+            .into_iter()
+            .filter_map(|pane| {
+                self.resources
+                    .remove(&pane)
+                    .map(|resource| (pane, resource))
+            })
+            .collect();
+        self.resources.extend(created);
+        Ok(removed)
+    }
 }
 
 impl Session {
@@ -420,5 +518,47 @@ mod tests {
         session.split_focused(SplitDirection::Horizontal);
         session.focus_next();
         assert_eq!(session.focused(), PaneId(1));
+    }
+
+    #[test]
+    fn pane_registry_tracks_split_and_close_lifecycle() {
+        let mut session = session();
+        let mut registry = PaneRegistry::new();
+        let removed = registry
+            .reconcile(&session, |pane| Ok::<_, ()>(format!("pty-{}", pane.get())))
+            .unwrap();
+        assert!(removed.is_empty());
+        assert_eq!(registry.get(PaneId(1)).map(String::as_str), Some("pty-1"));
+
+        session.split_focused(SplitDirection::Horizontal);
+        registry
+            .reconcile(&session, |pane| Ok::<_, ()>(format!("pty-{}", pane.get())))
+            .unwrap();
+        assert_eq!(registry.len(), 2);
+
+        session.close_focused();
+        let removed = registry
+            .reconcile(&session, |_| -> Result<String, ()> {
+                unreachable!("closing a pane cannot require a new resource")
+            })
+            .unwrap();
+        assert_eq!(removed, vec![(PaneId(2), "pty-2".to_owned())]);
+        assert_eq!(registry.len(), 1);
+    }
+
+    #[test]
+    fn pane_registry_rolls_back_when_creation_fails() {
+        let mut session = session();
+        session.split_focused(SplitDirection::Horizontal);
+        let mut registry = PaneRegistry::new();
+        let error = registry.reconcile(&session, |pane| {
+            if pane == PaneId(2) {
+                Err("spawn failed")
+            } else {
+                Ok(format!("pty-{}", pane.get()))
+            }
+        });
+        assert_eq!(error, Err("spawn failed"));
+        assert!(registry.is_empty());
     }
 }

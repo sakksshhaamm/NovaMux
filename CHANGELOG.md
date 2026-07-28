@@ -13,6 +13,7 @@
 - Raw keyboard input and live terminal resize propagation.
 - Byte-preserving `Ctrl-B` command routing for live-pane controls.
 - Bounded VT-compatible terminal buffers for independent live panes.
+- Atomic pane-to-runtime ownership reconciliation with failed-spawn rollback.
 
 ### Fixed
 
