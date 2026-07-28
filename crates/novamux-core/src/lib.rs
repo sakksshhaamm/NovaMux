@@ -2,6 +2,10 @@
 
 use std::fmt;
 
+mod input;
+
+pub use input::{InputAction, InputRouter, MultiplexerCommand};
+
 /// A stable identifier for a pane within one session.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct PaneId(u64);

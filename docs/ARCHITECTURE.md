@@ -5,7 +5,9 @@ NovaMux is a modular Cargo workspace.
 ## Components
 
 - `novamux-core`: platform-independent session state, pane trees, focus, and
-  layout. It performs no I/O and executes no commands.
+  layout. It also owns the byte-preserving `Ctrl-B` input router so shortcut
+  behavior can be tested without a terminal or process. It performs no I/O and
+  executes no commands.
 - `novamux`: the user-facing executable. Its current `demo` command renders a
   fixed layout preview without starting a shell.
 
