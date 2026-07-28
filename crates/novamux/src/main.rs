@@ -74,8 +74,7 @@ fn run_shell_inner() -> Result<u8, Box<dyn std::error::Error>> {
         .name("novamux-pty-output".to_owned())
         .spawn(move || -> io::Result<()> {
             let mut stdout = io::stdout().lock();
-            io::copy(&mut reader, &mut stdout)?;
-            stdout.flush()
+            copy_and_flush(&mut reader, &mut stdout)
         })?;
 
     let input_thread = thread::Builder::new()
@@ -152,6 +151,18 @@ fn current_pty_size() -> PtySize {
     }
 }
 
+fn copy_and_flush(reader: &mut impl Read, writer: &mut impl Write) -> io::Result<()> {
+    let mut buffer = [0_u8; 4096];
+    loop {
+        let read = reader.read(&mut buffer)?;
+        if read == 0 {
+            return Ok(());
+        }
+        writer.write_all(&buffer[..read])?;
+        writer.flush()?;
+    }
+}
+
 #[cfg(target_os = "windows")]
 const fn default_shell() -> &'static str {
     "cmd.exe"
@@ -210,10 +221,38 @@ fn run_demo(name: &str) -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Cursor;
+
+    #[derive(Default)]
+    struct FlushTrackingWriter {
+        bytes: Vec<u8>,
+        flushes: usize,
+    }
+
+    impl Write for FlushTrackingWriter {
+        fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+            self.bytes.extend_from_slice(buffer);
+            Ok(buffer.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            self.flushes += 1;
+            Ok(())
+        }
+    }
 
     #[test]
     fn shell_is_an_absolute_fixed_path_on_macos() {
         #[cfg(target_os = "macos")]
         assert_eq!(default_shell(), "/bin/zsh");
+    }
+
+    #[test]
+    fn pty_output_is_flushed_without_waiting_for_a_newline() {
+        let mut input = Cursor::new(b"exit".as_slice());
+        let mut output = FlushTrackingWriter::default();
+        copy_and_flush(&mut input, &mut output).unwrap();
+        assert_eq!(output.bytes, b"exit");
+        assert_eq!(output.flushes, 1);
     }
 }

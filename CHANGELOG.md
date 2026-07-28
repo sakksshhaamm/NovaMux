@@ -13,4 +13,9 @@
 - Raw keyboard input and live terminal resize propagation.
 - Byte-preserving `Ctrl-B` command routing for live-pane controls.
 - Bounded VT-compatible terminal buffers for independent live panes.
+
+### Fixed
+
+- PTY echo is flushed after every read so typed characters remain immediately
+  visible even before Enter is pressed.
 - Architecture, dependency, security, and roadmap documentation.
